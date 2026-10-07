@@ -60,6 +60,54 @@ def load_revenge():
         return json.load(f)
 
 
+def load_rivalries():
+    path = os.path.join(os.path.dirname(__file__), "data", "rivalries.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def roster_names(tid):
+    """Lower-cased names of the players currently on a team's roster."""
+    try:
+        data = get(f"{API}/teams/{tid}/roster")
+    except Exception as e:
+        print(f"WARNING: no roster for team {tid}: {e}")
+        return None
+    names = set()
+    for a in data.get("athletes", []):
+        for p in a.get("items", [a]):
+            if p.get("displayName"):
+                names.add(p["displayName"].strip().lower())
+    for c in data.get("coach", []):
+        full = f'{c.get("firstName", "")} {c.get("lastName", "")}'.strip().lower()
+        if full:
+            names.add(full)
+    return names
+
+
+def rivalry_notes(a_team, h_team, rivalries):
+    """Incidents for this matchup, kept only if an involved player is on either roster today."""
+    key = "-".join(sorted([a_team["abbreviation"], h_team["abbreviation"]]))
+    incidents = rivalries.get(key, [])
+    if not incidents:
+        return ""
+    ra, rh = roster_names(a_team["id"]), roster_names(h_team["id"])
+    if ra is None or rh is None:
+        return ""
+    current = ra | rh
+    shown = [i for i in incidents
+             if any(p["role"] != "referee" and p["name"].strip().lower() in current for p in i["people"])]
+    if not shown:
+        return ""
+    items = "".join(
+        f'<li><b>{escape(i["date"])}</b> <span class="kind">{escape(i.get("type", ""))}</span> {escape(i["summary"])} '
+        f'<a href="{escape(i["source_url"], quote=True)}" rel="noopener">{escape(i["source_name"])}</a></li>'
+        for i in sorted(shown, key=lambda i: i["date"], reverse=True))
+    return f'<details><summary>Rivalry notes ({len(shown)})</summary><ul>{items}</ul></details>'
+
+
 def team_line(info):
     if info is None:
         return "Rest data unavailable"
@@ -74,7 +122,7 @@ def team_line(info):
     return " &middot; ".join(bits)
 
 
-def card(ev, today, revenge):
+def card(ev, today, revenge, rivalries):
     comp = ev["competitions"][0]
     side = {c["homeAway"]: c for c in comp["competitors"]}
     away, home = side["away"], side["home"]
@@ -90,10 +138,12 @@ def card(ev, today, revenge):
     tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
     tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
     name = lambda c: escape(c["team"]["displayName"])
+    notes = rivalry_notes(away["team"], home["team"], rivalries)
     return f"""<article class="card">
   <div class="top"><span class="tip">{tip}</span>{tag_html}</div>
   <h2>{name(away)} <small>at</small> {name(home)}</h2>
   <dl><dt>{escape(a)}</dt><dd>{team_line(ai)}</dd><dt>{escape(h)}</dt><dd>{team_line(hi)}</dd></dl>
+  {notes}
 </article>"""
 
 
@@ -113,6 +163,9 @@ border-radius:10px;padding:14px 16px;margin-bottom:12px}.top{display:flex;flex-w
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
+details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:600}
+details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
+details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
 """
 
 
@@ -122,7 +175,8 @@ def main():
     data = get(f"{API}/scoreboard?dates={today:%Y%m%d}")
     events = sorted(data.get("events", []), key=lambda e: e["date"])
     revenge = load_revenge()
-    cards = "".join(card(e, today, revenge) for e in events) or '<p class="empty">No NBA games today.</p>'
+    rivalries = load_rivalries()
+    cards = "".join(card(e, today, revenge, rivalries) for e in events) or '<p class="empty">No NBA games today.</p>'
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
