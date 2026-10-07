@@ -1,0 +1,17 @@
+[
+  {"winner": "DET", "loser": "ORL", "result": "4-3", "round": "First Round"},
+  {"winner": "CLE", "loser": "TOR", "result": "4-3", "round": "First Round"},
+  {"winner": "PHI", "loser": "BOS", "result": "4-3", "round": "First Round"},
+  {"winner": "NY",  "loser": "ATL", "result": "4-2", "round": "First Round"},
+  {"winner": "OKC", "loser": "PHX", "result": "4-0", "round": "First Round"},
+  {"winner": "LAL", "loser": "HOU", "result": "4-2", "round": "First Round"},
+  {"winner": "SA",  "loser": "POR", "result": "4-1", "round": "First Round"},
+  {"winner": "MIN", "loser": "DEN", "result": "4-2", "round": "First Round"},
+  {"winner": "NY",  "loser": "PHI", "result": "4-0", "round": "Second Round"},
+  {"winner": "CLE", "loser": "DET", "result": "4-3", "round": "Second Round"},
+  {"winner": "OKC", "loser": "LAL", "result": "4-0", "round": "Second Round"},
+  {"winner": "SA",  "loser": "MIN", "result": "4-2", "round": "Second Round"},
+  {"winner": "NY",  "loser": "CLE", "result": "4-0", "round": "Conference Finals"},
+  {"winner": "SA",  "loser": "OKC", "result": "4-3", "round": "Conference Finals"},
+  {"winner": "NY",  "loser": "SA",  "result": "4-1", "round": "NBA Finals"}
+]
