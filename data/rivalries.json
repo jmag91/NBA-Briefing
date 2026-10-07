@@ -3,10 +3,25 @@
     {
       "date": "2024-05-10",
       "type": "Coach vs. officials",
-      "summary": "2024 East semifinals: Pacers coach Rick Carlisle was fined $35,000 for criticizing the officiating after Game 2, arguing small-market teams were not getting a fair whistle against the Knicks.",
-      "people": [{"name": "Rick Carlisle", "role": "coach"}],
-      "source_name": "WIBC",
-      "source_url": "https://1075thefan.com/316605/pacers-coach-carlisle-fined-35000-for-game-2-ref-remarks/"
+      "summary": "2024 East semifinals: Pacers coach Rick Carlisle was fined $35,000 for publicly criticizing the officiating and questioning the league's integrity after Game 2. He singled out an uncalled Josh Hart shove on Tyrese Haliburton, who was dealing with back problems.",
+      "people": [
+        {"name": "Rick Carlisle", "role": "coach"},
+        {"name": "Josh Hart", "role": "player"},
+        {"name": "Tyrese Haliburton", "role": "player"}
+      ],
+      "source_name": "CBS Sports",
+      "source_url": "https://www.cbssports.com/nba/news/pacers-rick-carlisle-fined-35000-for-postgame-comments-after-game-2-loss-vs-knicks-in-nba-playoffs/"
+    },
+    {
+      "date": "2024-05-10",
+      "type": "Public feud",
+      "summary": "2024 East semifinals: Josh Hart called Carlisle's officiating complaints disrespectful to the Knicks. The Pacers had submitted 78 calls from Games 1 and 2 to the league office for review.",
+      "people": [
+        {"name": "Josh Hart", "role": "player"},
+        {"name": "Rick Carlisle", "role": "coach"}
+      ],
+      "source_name": "Sports Illustrated",
+      "source_url": "https://www.si.com/nba/knicks-josh-hart-rips-pacers-coach-rick-carlisle-over-officiating-complaints"
     },
     {
       "date": "2024-05-14",
@@ -25,10 +40,63 @@
     {
       "date": "2025-05-21",
       "type": "Trash talk",
-      "summary": "2025 East finals, Game 1: Tyrese Haliburton copied Reggie Miller's choke celebration after a game-tying shot that forced overtime, reviving a symbol of the rivalry.",
+      "summary": "2025 East finals, Game 1: Tyrese Haliburton copied Reggie Miller's choke celebration after a game-tying shot that forced overtime. Indiana won 138-135 in overtime.",
       "people": [{"name": "Tyrese Haliburton", "role": "player"}],
       "source_name": "ESPN (via 101.7 The Team)",
       "source_url": "https://www.1017theteam.com/news/%f0%9f%91%8a-haliburton-choke-latest-in-pacers-knicks-beef"
+    }
+  ],
+  "NY-PHI": [
+    {
+      "date": "2024-04-23",
+      "type": "Coach vs. officials",
+      "summary": "2024 first round: after losing Games 1 and 2 in New York, the 76ers said they planned to file a grievance over the officiating. Joel Embiid said Tyrese Maxey was fouled on the play that led to the Knicks' go-ahead steal in Game 2 and called the officiating unacceptable.",
+      "people": [
+        {"name": "Joel Embiid", "role": "player"},
+        {"name": "Tyrese Maxey", "role": "player"},
+        {"name": "Nick Nurse", "role": "coach"}
+      ],
+      "source_name": "AP via TSN",
+      "source_url": "https://www.tsn.ca/nba/76ers-plan-to-file-grievance-about-officiating-during-first-two-games-of-series-against-knicks-1.2108224"
+    },
+    {
+      "date": "2024-04-25",
+      "type": "Flagrant foul",
+      "summary": "2024 first round, Game 3: Joel Embiid got a flagrant 1 for grabbing the legs of Mitchell Robinson, and also appeared to strike Robinson in the groin on a shot. Donte DiVincenzo called the play dirty and Josh Hart called it reckless.",
+      "people": [
+        {"name": "Joel Embiid", "role": "player"},
+        {"name": "Mitchell Robinson", "role": "player"},
+        {"name": "Donte DiVincenzo", "role": "player"},
+        {"name": "Josh Hart", "role": "player"}
+      ],
+      "source_name": "USA Today via Yahoo",
+      "source_url": "https://au.sports.yahoo.com/york-knicks-call-joel-embiids-053013638.html"
+    },
+    {
+      "date": "2024-04-30",
+      "type": "Flagrant foul",
+      "summary": "2024 first round, Game 5: Embiid was assessed a flagrant 1 on review for a smack across Jalen Brunson's face. Philadelphia won 112-106 in overtime to force a Game 6.",
+      "people": [
+        {"name": "Joel Embiid", "role": "player"},
+        {"name": "Jalen Brunson", "role": "player"}
+      ],
+      "source_name": "Sportskeeda",
+      "source_url": "https://sportskeeda.com/basketball/news-playing-draymond-defense-playoffs-nba-fans-berate-dirty-joel-embiid-wild-smack-across-jalen-brunson-s-face"
+    }
+  ],
+  "ATL-NY": [
+    {
+      "date": "2026-04-30",
+      "type": "Fight / ejections",
+      "summary": "2026 first round, Game 6 (Knicks won 140-89): Mitchell Robinson and Dyson Daniels became entangled battling for position on a free throw, and both were given technicals and ejected. Onyeka Okongwu and Jalen Brunson helped separate them. The league fined Robinson $50,000, more than Daniels' $25,000, partly because of an inappropriate postgame social media post about the incident.",
+      "people": [
+        {"name": "Mitchell Robinson", "role": "player"},
+        {"name": "Dyson Daniels", "role": "player"},
+        {"name": "Onyeka Okongwu", "role": "player"},
+        {"name": "Jalen Brunson", "role": "player"}
+      ],
+      "source_name": "AP via Atlanta News First",
+      "source_url": "https://www.atlantanewsfirst.com/2026/05/02/hawks-dyson-daniels-fined-25k-fighting-knicks-mitchell-robinson-game-6-loss/"
     }
   ]
 }
