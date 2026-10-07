@@ -1,0 +1,34 @@
+{
+  "IND-NY": [
+    {
+      "date": "2024-05-10",
+      "type": "Coach vs. officials",
+      "summary": "2024 East semifinals: Pacers coach Rick Carlisle was fined $35,000 for criticizing the officiating after Game 2, arguing small-market teams were not getting a fair whistle against the Knicks.",
+      "people": [{"name": "Rick Carlisle", "role": "coach"}],
+      "source_name": "WIBC",
+      "source_url": "https://1075thefan.com/316605/pacers-coach-carlisle-fined-35000-for-game-2-ref-remarks/"
+    },
+    {
+      "date": "2024-05-14",
+      "type": "Scuffle",
+      "summary": "2024 East semifinals, Game 5: Donte DiVincenzo and Myles Turner scuffled and both received technicals. Isaiah Jackson, Alec Burks and Isaiah Hartenstein also got technicals in a separate flare-up. DiVincenzo said afterward the Pacers were trying to act like tough guys.",
+      "people": [
+        {"name": "Donte DiVincenzo", "role": "player"},
+        {"name": "Myles Turner", "role": "player"},
+        {"name": "Isaiah Jackson", "role": "player"},
+        {"name": "Alec Burks", "role": "player"},
+        {"name": "Isaiah Hartenstein", "role": "player"}
+      ],
+      "source_name": "CBS Sports",
+      "source_url": "https://www.cbssports.com/nba/news/knicks-donte-divincenzo-says-pacers-are-trying-to-be-tough-guys-after-game-5-altercation-with-myles-turner/"
+    },
+    {
+      "date": "2025-05-21",
+      "type": "Trash talk",
+      "summary": "2025 East finals, Game 1: Tyrese Haliburton copied Reggie Miller's choke celebration after a game-tying shot that forced overtime, reviving a symbol of the rivalry.",
+      "people": [{"name": "Tyrese Haliburton", "role": "player"}],
+      "source_name": "ESPN (via 101.7 The Team)",
+      "source_url": "https://www.1017theteam.com/news/%f0%9f%91%8a-haliburton-choke-latest-in-pacers-knicks-beef"
+    }
+  ]
+}
