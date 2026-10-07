@@ -68,22 +68,32 @@ def load_rivalries():
         return json.load(f)
 
 
+_rosters = {}
+
+
 def roster_names(tid):
-    """Lower-cased names of the players currently on a team's roster."""
+    """Lower-cased names of the players and head coach currently with a team."""
+    if tid in _rosters:
+        return _rosters[tid]
     try:
         data = get(f"{API}/teams/{tid}/roster")
     except Exception as e:
         print(f"WARNING: no roster for team {tid}: {e}")
+        _rosters[tid] = None
         return None
-    names = set()
+    names, coaches = set(), []
     for a in data.get("athletes", []):
         for p in a.get("items", [a]):
             if p.get("displayName"):
                 names.add(p["displayName"].strip().lower())
+    n_players = len(names)
     for c in data.get("coach", []):
         full = f'{c.get("firstName", "")} {c.get("lastName", "")}'.strip().lower()
         if full:
             names.add(full)
+            coaches.append(full.title())
+    print(f"Roster check team {tid}: {n_players} players, coach: {', '.join(coaches) or 'NOT FOUND'}")
+    _rosters[tid] = names
     return names
 
 
@@ -91,6 +101,7 @@ def rivalry_notes(a_team, h_team, rivalries):
     """Incidents for this matchup, kept only if an involved player is on either roster today."""
     key = "-".join(sorted([a_team["abbreviation"], h_team["abbreviation"]]))
     incidents = rivalries.get(key, [])
+    print(f"Rivalry check {key}: {len(incidents)} incident(s) on file")
     if not incidents:
         return ""
     ra, rh = roster_names(a_team["id"]), roster_names(h_team["id"])
@@ -99,6 +110,7 @@ def rivalry_notes(a_team, h_team, rivalries):
     current = ra | rh
     shown = [i for i in incidents
              if any(p["role"] != "referee" and p["name"].strip().lower() in current for p in i["people"])]
+    print(f"Rivalry check {key}: {len(shown)} shown after roster filter")
     if not shown:
         return ""
     items = "".join(
@@ -176,6 +188,9 @@ def main():
     events = sorted(data.get("events", []), key=lambda e: e["date"])
     revenge = load_revenge()
     rivalries = load_rivalries()
+    for e in events:
+        for c in e["competitions"][0]["competitors"]:
+            roster_names(c["team"]["id"])
     cards = "".join(card(e, today, revenge, rivalries) for e in events) or '<p class="empty">No NBA games today.</p>'
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
