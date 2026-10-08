@@ -3,7 +3,7 @@ Pulls today's slate from ESPN's public endpoints, checks schedule fatigue
 (checklist #1) and playoff revenge (checklist #2), and writes docs/index.html.
 Free: needs no API key and no extra packages.
 """
-import json, os, urllib.request
+import json, os, unicodedata, urllib.request
 from datetime import datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
@@ -11,6 +11,466 @@ from zoneinfo import ZoneInfo
 ET, PT = ZoneInfo("America/New_York"), ZoneInfo("America/Los_Angeles")
 API = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
 _cache = {}
+
+
+def norm(s):
+    """Lower-case a name and strip accents so Doncic matches Doncic with a hacek."""
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in s if not unicodedata.combining(c)).strip().lower()
+
+
+REVENGE_JSON = r'''[
+ {
+  "winner": "DET",
+  "loser": "ORL",
+  "result": "4-3",
+  "round": "First Round"
+ },
+ {
+  "winner": "CLE",
+  "loser": "TOR",
+  "result": "4-3",
+  "round": "First Round"
+ },
+ {
+  "winner": "PHI",
+  "loser": "BOS",
+  "result": "4-3",
+  "round": "First Round"
+ },
+ {
+  "winner": "NY",
+  "loser": "ATL",
+  "result": "4-2",
+  "round": "First Round"
+ },
+ {
+  "winner": "OKC",
+  "loser": "PHX",
+  "result": "4-0",
+  "round": "First Round"
+ },
+ {
+  "winner": "LAL",
+  "loser": "HOU",
+  "result": "4-2",
+  "round": "First Round"
+ },
+ {
+  "winner": "SA",
+  "loser": "POR",
+  "result": "4-1",
+  "round": "First Round"
+ },
+ {
+  "winner": "MIN",
+  "loser": "DEN",
+  "result": "4-2",
+  "round": "First Round"
+ },
+ {
+  "winner": "NY",
+  "loser": "PHI",
+  "result": "4-0",
+  "round": "Second Round"
+ },
+ {
+  "winner": "CLE",
+  "loser": "DET",
+  "result": "4-3",
+  "round": "Second Round"
+ },
+ {
+  "winner": "OKC",
+  "loser": "LAL",
+  "result": "4-0",
+  "round": "Second Round"
+ },
+ {
+  "winner": "SA",
+  "loser": "MIN",
+  "result": "4-2",
+  "round": "Second Round"
+ },
+ {
+  "winner": "NY",
+  "loser": "CLE",
+  "result": "4-0",
+  "round": "Conference Finals"
+ },
+ {
+  "winner": "SA",
+  "loser": "OKC",
+  "result": "4-3",
+  "round": "Conference Finals"
+ },
+ {
+  "winner": "NY",
+  "loser": "SA",
+  "result": "4-1",
+  "round": "NBA Finals"
+ }
+]'''
+
+RIVALRY_JSON = r'''{
+ "ATL-MIN": [
+  {
+   "date": "2026-02-09",
+   "type": "Fight / ejections",
+   "summary": "Timberwolves 138-116: Mouhamed Gueye pushed Naz Reid from behind, Reid approached him, and the two grabbed each other's jerseys. Both got technicals and were ejected, and the league fined each $35,000.",
+   "people": [
+    {
+     "name": "Mouhamed Gueye",
+     "role": "player"
+    },
+    {
+     "name": "Naz Reid",
+     "role": "player"
+    }
+   ],
+   "source_name": "NBA official release",
+   "source_url": "https://official.nba.com/hawks-mouhamed-gueye-and-timberwolves-naz-reid-fined/"
+  }
+ ],
+ "ATL-NY": [
+  {
+   "date": "2026-04-30",
+   "type": "Fight / ejections",
+   "summary": "2026 first round, Game 6 (Knicks won 140-89): Mitchell Robinson and Dyson Daniels became entangled battling for position on a free throw, and both were given technicals and ejected. Onyeka Okongwu and Jalen Brunson helped separate them. The league fined Robinson $50,000, more than Daniels' $25,000, partly because of an inappropriate postgame social media post about the incident.",
+   "people": [
+    {
+     "name": "Mitchell Robinson",
+     "role": "player"
+    },
+    {
+     "name": "Dyson Daniels",
+     "role": "player"
+    },
+    {
+     "name": "Onyeka Okongwu",
+     "role": "player"
+    },
+    {
+     "name": "Jalen Brunson",
+     "role": "player"
+    }
+   ],
+   "source_name": "AP via Atlanta News First",
+   "source_url": "https://www.atlantanewsfirst.com/2026/05/02/hawks-dyson-daniels-fined-25k-fighting-knicks-mitchell-robinson-game-6-loss/"
+  }
+ ],
+ "BOS-PHI": [
+  {
+   "date": "2026-05-05",
+   "type": "Player vs. officials",
+   "summary": "After Boston's 109-100 Game 7 loss to the 76ers in the first round, Jaylen Brown said on a livestream that officials had an agenda to call fouls against him for pushing off and that some referees needed to be investigated. The league fined him $50,000. He had already been fined $35,000 in January for a similar rant.",
+   "people": [
+    {
+     "name": "Jaylen Brown",
+     "role": "player"
+    }
+   ],
+   "source_name": "AP via The Sun Chronicle",
+   "source_url": "https://www.thesunchronicle.com/sports/celtics-jaylen-brown-fined-50-000-by-the-nba-for-public-criticism-of-playoff-officiating/article_2b855851-976e-505e-9e99-689a998e90ba.html"
+  }
+ ],
+ "BOS-SA": [
+  {
+   "date": "2026-01-12",
+   "type": "Player vs. officials",
+   "summary": "Jaylen Brown was fined $35,000 for public criticism of the officiating, in comments to the press and on social media after Boston's 100-95 home loss to San Antonio on Jan. 10.",
+   "people": [
+    {
+     "name": "Jaylen Brown",
+     "role": "player"
+    }
+   ],
+   "source_name": "NBA official release",
+   "source_url": "https://official.nba.com/bostons-brown-fined/"
+  }
+ ],
+ "CHA-DET": [
+  {
+   "date": "2026-02-09",
+   "type": "Fight / suspensions",
+   "summary": "Pistons 110, Hornets 104: after Moussa Diabate fouled Jalen Duren in the third quarter, a fight broke out and all four players involved were ejected. Isaiah Stewart, who left the bench area to join in, was suspended seven games, partly because of his history of unsportsmanlike acts. Miles Bridges and Diabate got four games each, and Duren two games for initiating the altercation.",
+   "people": [
+    {
+     "name": "Isaiah Stewart",
+     "role": "player"
+    },
+    {
+     "name": "Miles Bridges",
+     "role": "player"
+    },
+    {
+     "name": "Moussa Diabate",
+     "role": "player"
+    },
+    {
+     "name": "Jalen Duren",
+     "role": "player"
+    }
+   ],
+   "source_name": "NBA official release",
+   "source_url": "https://official.nba.com/nba-announces-penalties-from-pistons-hornets-game/"
+  }
+ ],
+ "CLE-PHX": [
+  {
+   "date": "2026-01-31",
+   "type": "Coach vs. official",
+   "summary": "Cavaliers coach Kenny Atkinson was fined $50,000 for aggressively pursuing, berating and making inadvertent contact with an official during Cleveland's loss to the Suns on Jan. 30. He was upset about a no-call on a defensive play near the perimeter.",
+   "people": [
+    {
+     "name": "Kenny Atkinson",
+     "role": "coach"
+    }
+   ],
+   "source_name": "AP via Yuma Sun",
+   "source_url": "https://www.yumasun.com/sports/cavaliers-coach-kenny-atkinson-fined-50k-for-actions-following-ejection-in-loss-vs-suns/article_aa1f0fc9-cc30-54c9-8346-32609a0222c7.html"
+  }
+ ],
+ "DEN-MIN": [
+  {
+   "date": "2026-04-25",
+   "type": "Fight / ejections",
+   "summary": "2026 first round, Game 4 (Timberwolves won 112-96): in the final seconds, Nikola Jokic confronted and shoved Jaden McDaniels after McDaniels took an uncontested layup with the game decided. Julius Randle then shoved Bruce Brown. Jokic and Randle were ejected; the league fined Jokic $50,000 and Randle $35,000 and did not suspend either.",
+   "people": [
+    {
+     "name": "Nikola Jokic",
+     "role": "player"
+    },
+    {
+     "name": "Julius Randle",
+     "role": "player"
+    },
+    {
+     "name": "Jaden McDaniels",
+     "role": "player"
+    },
+    {
+     "name": "Bruce Brown",
+     "role": "player"
+    }
+   ],
+   "source_name": "Eurohoops (NBA release)",
+   "source_url": "https://www.eurohoops.net/en/nba-news/1960825/nikola-jokic-sanction-denver-nuggets-nba-playoffs/"
+  }
+ ],
+ "IND-NY": [
+  {
+   "date": "2024-05-10",
+   "type": "Coach vs. officials",
+   "summary": "2024 East semifinals: Pacers coach Rick Carlisle was fined $35,000 for publicly criticizing the officiating and questioning the league's integrity after Game 2. He singled out an uncalled Josh Hart shove on Tyrese Haliburton, who was dealing with back problems.",
+   "people": [
+    {
+     "name": "Rick Carlisle",
+     "role": "coach"
+    },
+    {
+     "name": "Josh Hart",
+     "role": "player"
+    },
+    {
+     "name": "Tyrese Haliburton",
+     "role": "player"
+    }
+   ],
+   "source_name": "CBS Sports",
+   "source_url": "https://www.cbssports.com/nba/news/pacers-rick-carlisle-fined-35000-for-postgame-comments-after-game-2-loss-vs-knicks-in-nba-playoffs/"
+  },
+  {
+   "date": "2024-05-10",
+   "type": "Public feud",
+   "summary": "2024 East semifinals: Josh Hart called Carlisle's officiating complaints disrespectful to the Knicks. The Pacers had submitted 78 calls from Games 1 and 2 to the league office for review.",
+   "people": [
+    {
+     "name": "Josh Hart",
+     "role": "player"
+    },
+    {
+     "name": "Rick Carlisle",
+     "role": "coach"
+    }
+   ],
+   "source_name": "Sports Illustrated",
+   "source_url": "https://www.si.com/nba/knicks-josh-hart-rips-pacers-coach-rick-carlisle-over-officiating-complaints"
+  },
+  {
+   "date": "2024-05-14",
+   "type": "Scuffle",
+   "summary": "2024 East semifinals, Game 5: Donte DiVincenzo and Myles Turner scuffled and both received technicals. Isaiah Jackson, Alec Burks and Isaiah Hartenstein also got technicals in a separate flare-up. DiVincenzo said afterward the Pacers were trying to act like tough guys.",
+   "people": [
+    {
+     "name": "Donte DiVincenzo",
+     "role": "player"
+    },
+    {
+     "name": "Myles Turner",
+     "role": "player"
+    },
+    {
+     "name": "Isaiah Jackson",
+     "role": "player"
+    },
+    {
+     "name": "Alec Burks",
+     "role": "player"
+    },
+    {
+     "name": "Isaiah Hartenstein",
+     "role": "player"
+    }
+   ],
+   "source_name": "CBS Sports",
+   "source_url": "https://www.cbssports.com/nba/news/knicks-donte-divincenzo-says-pacers-are-trying-to-be-tough-guys-after-game-5-altercation-with-myles-turner/"
+  },
+  {
+   "date": "2025-05-21",
+   "type": "Trash talk",
+   "summary": "2025 East finals, Game 1: Tyrese Haliburton copied Reggie Miller's choke celebration after a game-tying shot that forced overtime. Indiana won 138-135 in overtime.",
+   "people": [
+    {
+     "name": "Tyrese Haliburton",
+     "role": "player"
+    }
+   ],
+   "source_name": "ESPN (via 101.7 The Team)",
+   "source_url": "https://www.1017theteam.com/news/%f0%9f%91%8a-haliburton-choke-latest-in-pacers-knicks-beef"
+  }
+ ],
+ "LAL-NY": [
+  {
+   "date": "2026-03-08",
+   "type": "Player vs. official",
+   "summary": "Luka Doncic was fined $50,000 for rubbing his fingers together in a money gesture toward an official after not getting a charge call in the Lakers' 110-97 win. LA Magazine identified the official as Tre Maddox. Doncic had 15 technical fouls at the time, one short of an automatic one-game suspension.",
+   "people": [
+    {
+     "name": "Luka Doncic",
+     "role": "player"
+    },
+    {
+     "name": "Tre Maddox",
+     "role": "referee"
+    }
+   ],
+   "source_name": "NBA official release",
+   "source_url": "https://official.nba.com/lakers-doncic-fined"
+  }
+ ],
+ "NY-PHI": [
+  {
+   "date": "2024-04-23",
+   "type": "Coach vs. officials",
+   "summary": "2024 first round: after losing Games 1 and 2 in New York, the 76ers said they planned to file a grievance over the officiating. Joel Embiid said Tyrese Maxey was fouled on the play that led to the Knicks' go-ahead steal in Game 2 and called the officiating unacceptable.",
+   "people": [
+    {
+     "name": "Joel Embiid",
+     "role": "player"
+    },
+    {
+     "name": "Tyrese Maxey",
+     "role": "player"
+    },
+    {
+     "name": "Nick Nurse",
+     "role": "coach"
+    }
+   ],
+   "source_name": "AP via TSN",
+   "source_url": "https://www.tsn.ca/nba/76ers-plan-to-file-grievance-about-officiating-during-first-two-games-of-series-against-knicks-1.2108224"
+  },
+  {
+   "date": "2024-04-25",
+   "type": "Flagrant foul",
+   "summary": "2024 first round, Game 3: Joel Embiid got a flagrant 1 for grabbing the legs of Mitchell Robinson, and also appeared to strike Robinson in the groin on a shot. Donte DiVincenzo called the play dirty and Josh Hart called it reckless.",
+   "people": [
+    {
+     "name": "Joel Embiid",
+     "role": "player"
+    },
+    {
+     "name": "Mitchell Robinson",
+     "role": "player"
+    },
+    {
+     "name": "Donte DiVincenzo",
+     "role": "player"
+    },
+    {
+     "name": "Josh Hart",
+     "role": "player"
+    }
+   ],
+   "source_name": "USA Today via Yahoo",
+   "source_url": "https://au.sports.yahoo.com/york-knicks-call-joel-embiids-053013638.html"
+  },
+  {
+   "date": "2024-04-30",
+   "type": "Flagrant foul",
+   "summary": "2024 first round, Game 5: Embiid was assessed a flagrant 1 on review for a smack across Jalen Brunson's face. Philadelphia won 112-106 in overtime to force a Game 6.",
+   "people": [
+    {
+     "name": "Joel Embiid",
+     "role": "player"
+    },
+    {
+     "name": "Jalen Brunson",
+     "role": "player"
+    }
+   ],
+   "source_name": "Sportskeeda",
+   "source_url": "https://sportskeeda.com/basketball/news-playing-draymond-defense-playoffs-nba-fans-berate-dirty-joel-embiid-wild-smack-across-jalen-brunson-s-face"
+  }
+ ],
+ "OKC-PHX": [
+  {
+   "date": "2026-04-23",
+   "type": "Player vs. officials",
+   "summary": "2026 first round: Devin Booker was fined $35,000 for public criticism of the officiating after Phoenix's Game 2 loss in Oklahoma City. The Thunder went on to sweep the series.",
+   "people": [
+    {
+     "name": "Devin Booker",
+     "role": "player"
+    }
+   ],
+   "source_name": "AP via Daily Courier",
+   "source_url": "https://www.dcourier.com/sports/suns-guard-devin-booker-fined-35-000-for-public-criticism-of-officials-after-thunder-game/article_98b8619b-7b84-51fb-8148-18cc75d54acf.html"
+  }
+ ],
+ "OKC-WSH": [
+  {
+   "date": "2026-03-21",
+   "type": "Fight / suspensions",
+   "summary": "Late in the first half of Oklahoma City's 132-111 win, Jaylin Williams and Justin Champagnie began shoving under the basket, Anthony Gill and Ajay Mitchell joined in, and the scuffle spilled into the seating area. Champagnie, Williams, Mitchell and Cason Wallace were ejected. Mitchell and Champagnie were suspended one game each; Williams was fined $50,000 and Wallace and Gill $35,000 each.",
+   "people": [
+    {
+     "name": "Justin Champagnie",
+     "role": "player"
+    },
+    {
+     "name": "Ajay Mitchell",
+     "role": "player"
+    },
+    {
+     "name": "Jaylin Williams",
+     "role": "player"
+    },
+    {
+     "name": "Cason Wallace",
+     "role": "player"
+    },
+    {
+     "name": "Anthony Gill",
+     "role": "player"
+    }
+   ],
+   "source_name": "NBA official release",
+   "source_url": "https://official.nba.com/nba-announces-penalties-from-thunder-wizards-game"
+  }
+ ]
+}'''
 
 
 def get(url):
@@ -53,19 +513,11 @@ def rest_info(tid, today):
 
 
 def load_revenge():
-    path = os.path.join(os.path.dirname(__file__), "data", "revenge.json")
-    if not os.path.exists(path):
-        return []
-    with open(path) as f:
-        return json.load(f)
+    return json.loads(REVENGE_JSON)
 
 
 def load_rivalries():
-    path = os.path.join(os.path.dirname(__file__), "data", "rivalries.json")
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    return json.loads(RIVALRY_JSON)
 
 
 _rosters = {}
@@ -85,10 +537,10 @@ def roster_names(tid):
     for a in data.get("athletes", []):
         for p in a.get("items", [a]):
             if p.get("displayName"):
-                names.add(p["displayName"].strip().lower())
+                names.add(norm(p["displayName"]))
     n_players = len(names)
     for c in data.get("coach", []):
-        full = f'{c.get("firstName", "")} {c.get("lastName", "")}'.strip().lower()
+        full = norm(f'{c.get("firstName", "")} {c.get("lastName", "")}')
         if full:
             names.add(full)
             coaches.append(full.title())
@@ -109,7 +561,7 @@ def rivalry_notes(a_team, h_team, rivalries):
         return ""
     current = ra | rh
     shown = [i for i in incidents
-             if any(p["role"] != "referee" and p["name"].strip().lower() in current for p in i["people"])]
+             if any(p["role"] != "referee" and norm(p["name"]) in current for p in i["people"])]
     print(f"Rivalry check {key}: {len(shown)} shown after roster filter")
     if not shown:
         return ""
