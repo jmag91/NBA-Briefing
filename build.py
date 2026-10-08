@@ -3,7 +3,7 @@ Pulls today's slate from ESPN's public endpoints, checks schedule fatigue
 (checklist #1) and playoff revenge (checklist #2), and writes docs/index.html.
 Free: needs no API key and no extra packages.
 """
-import json, os, unicodedata, urllib.request
+import json, os, unicodedata, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
@@ -16,7 +16,10 @@ _cache = {}
 def norm(s):
     """Lower-case a name and strip accents so Doncic matches Doncic with a hacek."""
     s = unicodedata.normalize("NFKD", s)
-    return "".join(c for c in s if not unicodedata.combining(c)).strip().lower()
+    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
+    for ch in ".'\u2019":
+        s = s.replace(ch, "")
+    return " ".join(s.split())
 
 
 REVENGE_JSON = r'''[
@@ -231,6 +234,33 @@ RIVALRY_JSON = r'''{
    "source_url": "https://www.yumasun.com/sports/cavaliers-coach-kenny-atkinson-fined-50k-for-actions-following-ejection-in-loss-vs-suns/article_aa1f0fc9-cc30-54c9-8346-32609a0222c7.html"
   }
  ],
+ "DEN-LAC": [
+  {
+   "date": "2025-04-26",
+   "type": "Scuffle",
+   "summary": "2025 first round, Game 4: Clippers guard James Harden and Nuggets guard Christian Braun got into an altercation that drew in several players, with six technical fouls and no serious discipline. The league declined to suspend Nuggets forward Michael Porter Jr. for Game 5. Aaron Gordon won the game with a buzzer-beating dunk.",
+   "people": [
+    {
+     "name": "James Harden",
+     "role": "player"
+    },
+    {
+     "name": "Christian Braun",
+     "role": "player"
+    },
+    {
+     "name": "Michael Porter Jr.",
+     "role": "player"
+    },
+    {
+     "name": "Aaron Gordon",
+     "role": "player"
+    }
+   ],
+   "source_name": "Sports Illustrated (All Clippers)",
+   "source_url": "https://www.si.com/nba/clippers/news/nba-makes-decision-on-punishment-for-key-starter-in-clippers-nuggets-game-5-01jt19eb1w22"
+  }
+ ],
  "DEN-MIN": [
   {
    "date": "2026-04-25",
@@ -256,6 +286,104 @@ RIVALRY_JSON = r'''{
    ],
    "source_name": "Eurohoops (NBA release)",
    "source_url": "https://www.eurohoops.net/en/nba-news/1960825/nikola-jokic-sanction-denver-nuggets-nba-playoffs/"
+  }
+ ],
+ "DET-MIN": [
+  {
+   "date": "2025-03-30",
+   "type": "Fight / suspensions",
+   "summary": "Timberwolves 123, Pistons 104: Ron Holland II fouled Naz Reid, Reid confronted him, and Holland pushed Donte DiVincenzo, who shoved back. The two fell into spectators along the baseline, and Isaiah Stewart and Marcus Sasser then joined in. Five players and Pistons coach J.B. Bickerstaff were ejected. Stewart was suspended two games (partly for a history of unsportsmanlike acts), and Holland, Sasser, Reid and DiVincenzo one game each.",
+   "people": [
+    {
+     "name": "Isaiah Stewart",
+     "role": "player"
+    },
+    {
+     "name": "Ron Holland II",
+     "role": "player"
+    },
+    {
+     "name": "Ronald Holland II",
+     "role": "player"
+    },
+    {
+     "name": "Marcus Sasser",
+     "role": "player"
+    },
+    {
+     "name": "Naz Reid",
+     "role": "player"
+    },
+    {
+     "name": "Donte DiVincenzo",
+     "role": "player"
+    },
+    {
+     "name": "J.B. Bickerstaff",
+     "role": "coach"
+    }
+   ],
+   "source_name": "AP via ClickOnDetroit",
+   "source_url": "https://www.clickondetroit.com/sports/2025/04/01/nba-suspends-5-players-for-their-roles-in-pistons-timberwolves-altercation-that-spilled-into-stands/"
+  }
+ ],
+ "GS-MIN": [
+  {
+   "date": "2023-11-14",
+   "type": "Fight / suspension",
+   "summary": "Timberwolves 104, Warriors 101: Klay Thompson and Jaden McDaniels became entangled, Rudy Gobert wrapped up Thompson, and Draymond Green grabbed Gobert around the neck. Thompson and McDaniels were ejected, and Green was ejected on a Flagrant 2 and suspended five games, partly for his history of unsportsmanlike acts. Thompson, McDaniels and Gobert were each fined $25,000.",
+   "people": [
+    {
+     "name": "Draymond Green",
+     "role": "player"
+    },
+    {
+     "name": "Rudy Gobert",
+     "role": "player"
+    },
+    {
+     "name": "Jaden McDaniels",
+     "role": "player"
+    },
+    {
+     "name": "Klay Thompson",
+     "role": "player"
+    }
+   ],
+   "source_name": "NBA announcement via KSTP",
+   "source_url": "https://kstp.com/?p=2979027"
+  },
+  {
+   "date": "2025-05-10",
+   "type": "Player vs. officials",
+   "summary": "2025 conference semifinals, Game 3 (Timberwolves won 102-97): Draymond Green was fined $50,000 for an inappropriate comment questioning the integrity of game officials. The fine was announced May 14.",
+   "people": [
+    {
+     "name": "Draymond Green",
+     "role": "player"
+    }
+   ],
+   "source_name": "NBA official release",
+   "source_url": "https://official.nba.com/warriors-draymond-green-fined"
+  }
+ ],
+ "GS-PHX": [
+  {
+   "date": "2023-12-12",
+   "type": "Ejection / suspension",
+   "summary": "Suns 119, Warriors 116: Draymond Green spun around and struck Jusuf Nurkic in the face with his arm, dropping him, and was ejected. The league suspended him indefinitely, citing his repeated history of unsportsmanlike acts. Green said the hit was accidental.",
+   "people": [
+    {
+     "name": "Draymond Green",
+     "role": "player"
+    },
+    {
+     "name": "Jusuf Nurkic",
+     "role": "player"
+    }
+   ],
+   "source_name": "CNN via ABC17",
+   "source_url": "https://abc17news.com/?p=1255734"
   }
  ],
  "IND-NY": [
@@ -572,6 +700,115 @@ def rivalry_notes(a_team, h_team, rivalries):
     return f'<details><summary>Rivalry notes ({len(shown)})</summary><ul>{items}</ul></details>'
 
 
+NBA_STATS = "https://stats.nba.com/stats/leaguedashteamstats"
+NBA_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+    "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com", "Accept": "application/json",
+    "x-nba-stats-origin": "stats", "x-nba-stats-token": "true",
+}
+GOOD, BAD = 10, 10      # elite = top 10 in the league, bottom tier = bottom 10
+BLEND_GAMES = 20        # blend with last season until a team has played this many games
+
+
+def nba_stats_ratings(season_end):
+    """{team: (offensive rating, defensive rating, games)} from stats.nba.com. May be blocked from cloud servers."""
+    params = {"Conference": "", "DateFrom": "", "DateTo": "", "Division": "", "GameScope": "", "GameSegment": "",
+              "LastNGames": 0, "LeagueID": "00", "Location": "", "MeasureType": "Advanced", "Month": 0,
+              "OpponentTeamID": 0, "Outcome": "", "PORound": 0, "PaceAdjust": "N", "PerMode": "PerGame",
+              "Period": 0, "PlayerExperience": "", "PlayerPosition": "", "PlusMinus": "N", "Rank": "N",
+              "Season": f"{season_end - 1}-{str(season_end)[2:]}", "SeasonSegment": "",
+              "SeasonType": "Regular Season", "ShotClockRange": "", "StarterBench": "", "TeamID": 0,
+              "TwoWay": 0, "VsConference": "", "VsDivision": ""}
+    req = urllib.request.Request(NBA_STATS + "?" + urllib.parse.urlencode(params), headers=NBA_HEADERS)
+    with urllib.request.urlopen(req, timeout=15) as r:
+        rs = json.load(r)["resultSets"][0]
+    h = rs["headers"]
+    i = {k: h.index(k) for k in ("TEAM_NAME", "GP", "OFF_RATING", "DEF_RATING")}
+    return {norm(row[i["TEAM_NAME"]]): (row[i["OFF_RATING"]], row[i["DEF_RATING"]], row[i["GP"]])
+            for row in rs["rowSet"] if row[i["GP"]]}
+
+
+def espn_ratings(season_end):
+    """Fallback: points scored / allowed per game from ESPN standings (not pace-adjusted)."""
+    data = get(f"https://site.api.espn.com/apis/v2/sports/basketball/nba/standings?season={season_end}")
+    out = {}
+    for conf in data.get("children", []):
+        for e in conf.get("standings", {}).get("entries", []):
+            st = {s["name"]: s.get("value") for s in e.get("stats", [])}
+            gp = st.get("gamesPlayed") or ((st.get("wins") or 0) + (st.get("losses") or 0))
+            pf, pa = st.get("avgPointsFor"), st.get("avgPointsAgainst")
+            if gp and pf and pa:
+                out[norm(e["team"]["displayName"])] = (pf, pa, gp)
+    return out
+
+
+def load_ratings(today):
+    """Rank every team's offense and defense, blending with last season early on."""
+    season_end = today.year + 1 if today.month >= 8 else today.year
+    try:
+        cur, prior = nba_stats_ratings(season_end), nba_stats_ratings(season_end - 1)
+        label = "offensive/defensive rating (NBA stats)"
+    except Exception as e:
+        print(f"NBA stats unavailable ({e}); using ESPN points scored/allowed per game")
+        try:
+            cur, prior = espn_ratings(season_end), espn_ratings(season_end - 1)
+            label = "points scored/allowed per game (ESPN, not pace-adjusted)"
+        except Exception as e2:
+            print(f"WARNING: no team ratings: {e2}")
+            return None
+    blended = {}
+    for k in set(cur) | set(prior):
+        c, p = cur.get(k), prior.get(k)
+        if c and p:
+            w = min(c[2] / BLEND_GAMES, 1)
+            blended[k] = (w * c[0] + (1 - w) * p[0], w * c[1] + (1 - w) * p[1])
+        elif c or p:
+            blended[k] = (c or p)[:2]
+    n = len(blended)
+    if n < 20:
+        print(f"WARNING: only {n} teams have ratings; skipping mismatch flags")
+        return None
+    by_off = sorted(blended, key=lambda k: -blended[k][0])
+    by_def = sorted(blended, key=lambda k: blended[k][1])
+    ranks = {k: (by_off.index(k) + 1, by_def.index(k) + 1) for k in blended}
+    games = [c[2] for c in cur.values()]
+    if not games or max(games) == 0:
+        note = f"Ranks use last season's {label} until the season starts."
+    elif min(games) < BLEND_GAMES:
+        note = f"Ranks use {label}, blended with last season until a team reaches {BLEND_GAMES} games."
+    else:
+        note = f"Ranks use this season's {label}."
+    print(f"Ratings loaded for {n} teams: {label}")
+    return {"ranks": ranks, "n": n, "note": note}
+
+
+def chip(label, rank, n):
+    cls = "elite" if rank <= GOOD else "weak" if rank > n - BAD else ""
+    return f'<span class="chip {cls}">{label} #{rank}</span>'
+
+
+def mismatch_tags(away, home, ratings):
+    """Returns (tags, profile html) for elite-vs-bottom matchups and each team's league ranks."""
+    if not ratings:
+        return [], ""
+    n, ranks = ratings["n"], ratings["ranks"]
+    ra = ranks.get(norm(away["team"]["displayName"]))
+    rh = ranks.get(norm(home["team"]["displayName"]))
+    if not ra or not rh:
+        print(f"WARNING: no ranks for {away['team']['displayName']} or {home['team']['displayName']}")
+        return [], ""
+    tags = []
+    for (x, rx), (y, ry) in (((away, ra), (home, rh)), ((home, rh), (away, ra))):
+        xa, ya = x["team"]["abbreviation"], y["team"]["abbreviation"]
+        if rx[0] <= GOOD and ry[1] > n - BAD:
+            tags.append(("mismatch", f"{xa} elite offense (#{rx[0]}) vs. {ya} bottom-{BAD} defense (#{ry[1]})"))
+        if rx[1] <= GOOD and ry[0] > n - BAD:
+            tags.append(("lockdown", f"{xa} elite defense (#{rx[1]}) vs. {ya} bottom-{BAD} offense (#{ry[0]})"))
+    row = lambda t, r: (f'<div class="prof"><b>{escape(t["team"]["abbreviation"])}</b>'
+                        f'{chip("Offense", r[0], n)}{chip("Defense", r[1], n)}</div>')
+    return tags, row(away, ra) + row(home, rh)
+
+
 def team_line(info):
     if info is None:
         return "Rest data unavailable"
@@ -586,7 +823,7 @@ def team_line(info):
     return " &middot; ".join(bits)
 
 
-def card(ev, today, revenge, rivalries):
+def card(ev, today, revenge, rivalries, ratings):
     comp = ev["competitions"][0]
     side = {c["homeAway"]: c for c in comp["competitors"]}
     away, home = side["away"], side["home"]
@@ -599,6 +836,8 @@ def card(ev, today, revenge, rivalries):
     for r in revenge:
         if {r["winner"], r["loser"]} == {a, h}:
             tags.append(("revenge", f"Playoff revenge: {r['winner']} beat {r['loser']} {r['result']} ({r['round']})"))
+    rtags, prof = mismatch_tags(away, home, ratings)
+    tags += rtags
     tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
     tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
     name = lambda c: escape(c["team"]["displayName"])
@@ -607,15 +846,16 @@ def card(ev, today, revenge, rivalries):
   <div class="top"><span class="tip">{tip}</span>{tag_html}</div>
   <h2>{name(away)} <small>at</small> {name(home)}</h2>
   <dl><dt>{escape(a)}</dt><dd>{team_line(ai)}</dd><dt>{escape(h)}</dt><dd>{team_line(hi)}</dd></dl>
+  {prof}
   {notes}
 </article>"""
 
 
 CSS = """
 :root{--bg:#edf0f3;--card:#fff;--ink:#14202b;--mute:#5b6b7a;--line:#d5dce3;
---fatigue:#b3261e;--revenge:#6240b5;--mismatch:#0b6e5f;--tip:#14202b;--tipfg:#fff}
+--fatigue:#b3261e;--revenge:#6240b5;--mismatch:#0b6e5f;--lockdown:#1d5fb4;--weak:#9a5b00;--tip:#14202b;--tipfg:#fff}
 @media(prefers-color-scheme:dark){:root{--bg:#10161d;--card:#18212b;--ink:#e8edf2;--mute:#93a3b3;
---line:#2a3643;--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--tip:#e8edf2;--tipfg:#10161d}}
+--line:#2a3643;--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#e8edf2;--tipfg:#10161d}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
 main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
@@ -623,7 +863,8 @@ main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-seri
 border-radius:10px;padding:14px 16px;margin-bottom:12px}.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}
+.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.lockdown{color:var(--lockdown)}
+.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
@@ -643,7 +884,9 @@ def main():
     for e in events:
         for c in e["competitions"][0]["competitors"]:
             roster_names(c["team"]["id"])
-    cards = "".join(card(e, today, revenge, rivalries) for e in events) or '<p class="empty">No NBA games today.</p>'
+    ratings = load_ratings(today)
+    cards = "".join(card(e, today, revenge, rivalries, ratings) for e in events)
+    foot = (ratings["note"] + " " if ratings else "") + "Coming next: rotation age." or '<p class="empty">No NBA games today.</p>'
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -652,7 +895,7 @@ def main():
 <style>{CSS}</style></head><body><main>
 <h1>NBA Morning Briefing</h1><p class="sub">{stamp} &middot; {len(events)} game{'s' if len(events) != 1 else ''}</p>
 {cards}
-<p class="foot">Coming next: injuries, rotation age, offense/defense mismatches, matchup deep dives.</p>
+<p class="foot">{foot}</p>
 </main></body></html>"""
     os.makedirs("docs", exist_ok=True)
     with open("docs/index.html", "w", encoding="utf-8") as f:
