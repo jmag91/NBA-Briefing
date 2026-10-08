@@ -4,9 +4,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
 :root{--bg:#edf0f3;--card:#fff;--ink:#14202b;--mute:#5b6b7a;--line:#d5dce3;
---fatigue:#b3261e;--revenge:#6240b5;--mismatch:#0b6e5f;--tip:#14202b;--tipfg:#fff}
+--fatigue:#b3261e;--revenge:#6240b5;--mismatch:#0b6e5f;--lockdown:#1d5fb4;--weak:#9a5b00;--tip:#14202b;--tipfg:#fff}
 @media(prefers-color-scheme:dark){:root{--bg:#10161d;--card:#18212b;--ink:#e8edf2;--mute:#93a3b3;
---line:#2a3643;--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--tip:#e8edf2;--tipfg:#10161d}}
+--line:#2a3643;--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#e8edf2;--tipfg:#10161d}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
 main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
@@ -14,7 +14,8 @@ main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-seri
 border-radius:10px;padding:14px 16px;margin-bottom:12px}.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}
+.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.lockdown{color:var(--lockdown)}
+.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
@@ -22,32 +23,43 @@ details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary
 details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
 details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
 </style></head><body><main>
-<h1>NBA Morning Briefing</h1><p class="sub">Wednesday, October 7, 2026 &middot; 5 games</p>
+<h1>NBA Morning Briefing</h1><p class="sub">Wednesday, October 7, 2026 &middot; 6 games</p>
 <article class="card">
   <div class="top"><span class="tip">4:00 PM PT</span></div>
-  <h2>Minnesota Timberwolves <small>at</small> Indiana Pacers</h2>
-  <dl><dt>MIN</dt><dd>First game of the season</dd><dt>IND</dt><dd>First game of the season</dd></dl>
+  <h2>Boston Celtics <small>at</small> Cleveland Cavaliers</h2>
+  <dl><dt>BOS</dt><dd>First game of the season</dd><dt>CLE</dt><dd>First game of the season</dd></dl>
+  <div class="prof"><b>BOS</b><span class="chip ">Offense #19</span><span class="chip elite">Defense #1</span></div><div class="prof"><b>CLE</b><span class="chip elite">Offense #4</span><span class="chip ">Defense #17</span></div>
+  
+</article><article class="card">
+  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag mismatch">MIA elite offense (#1) vs. NO bottom-10 defense (#23)</span></div>
+  <h2>New Orleans Pelicans <small>at</small> Miami Heat</h2>
+  <dl><dt>NO</dt><dd>First game of the season</dd><dt>MIA</dt><dd>First game of the season</dd></dl>
+  <div class="prof"><b>NO</b><span class="chip ">Offense #16</span><span class="chip weak">Defense #23</span></div><div class="prof"><b>MIA</b><span class="chip elite">Offense #1</span><span class="chip weak">Defense #22</span></div>
+  
+</article><article class="card">
+  <div class="top"><span class="tip">4:30 PM PT</span></div>
+  <h2>Philadelphia 76ers <small>at</small> Brooklyn Nets</h2>
+  <dl><dt>PHI</dt><dd>First game of the season</dd><dt>BKN</dt><dd>First game of the season</dd></dl>
+  <div class="prof"><b>PHI</b><span class="chip ">Offense #11</span><span class="chip ">Defense #15</span></div><div class="prof"><b>BKN</b><span class="chip weak">Offense #30</span><span class="chip ">Defense #14</span></div>
+  
+</article><article class="card">
+  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag lockdown">NY elite defense (#5) vs. WSH bottom-10 offense (#26)</span></div>
+  <h2>Washington Wizards <small>at</small> New York Knicks</h2>
+  <dl><dt>WSH</dt><dd>First game of the season</dd><dt>NY</dt><dd>First game of the season</dd></dl>
+  <div class="prof"><b>WSH</b><span class="chip weak">Offense #26</span><span class="chip weak">Defense #30</span></div><div class="prof"><b>NY</b><span class="chip ">Offense #17</span><span class="chip elite">Defense #5</span></div>
   
 </article><article class="card">
   <div class="top"><span class="tip">5:00 PM PT</span></div>
-  <h2>Orlando Magic <small>at</small> Memphis Grizzlies</h2>
-  <dl><dt>ORL</dt><dd>First game of the season</dd><dt>MEM</dt><dd>First game of the season</dd></dl>
+  <h2>Atlanta Hawks <small>at</small> San Antonio Spurs</h2>
+  <dl><dt>ATL</dt><dd>First game of the season</dd><dt>SA</dt><dd>First game of the season</dd></dl>
+  <div class="prof"><b>ATL</b><span class="chip elite">Offense #6</span><span class="chip ">Defense #20</span></div><div class="prof"><b>SA</b><span class="chip elite">Offense #3</span><span class="chip elite">Defense #6</span></div>
   
 </article><article class="card">
-  <div class="top"><span class="tip">5:00 PM PT</span></div>
-  <h2>Milwaukee Bucks <small>at</small> Oklahoma City Thunder</h2>
-  <dl><dt>MIL</dt><dd>First game of the season</dd><dt>OKC</dt><dd>First game of the season</dd></dl>
-  
-</article><article class="card">
-  <div class="top"><span class="tip">5:00 PM PT</span></div>
-  <h2>Phoenix Suns <small>at</small> Chicago Bulls</h2>
-  <dl><dt>PHX</dt><dd>First game of the season</dd><dt>CHI</dt><dd>First game of the season</dd></dl>
-  
-</article><article class="card">
-  <div class="top"><span class="tip">7:00 PM PT</span></div>
-  <h2>Golden State Warriors <small>at</small> Portland Trail Blazers</h2>
-  <dl><dt>GS</dt><dd>First game of the season</dd><dt>POR</dt><dd>First game of the season</dd></dl>
+  <div class="top"><span class="tip">7:30 PM PT</span></div>
+  <h2>Sacramento Kings <small>at</small> Los Angeles Lakers</h2>
+  <dl><dt>SAC</dt><dd>First game of the season</dd><dt>LAL</dt><dd>First game of the season</dd></dl>
+  <div class="prof"><b>SAC</b><span class="chip weak">Offense #29</span><span class="chip weak">Defense #28</span></div><div class="prof"><b>LAL</b><span class="chip ">Offense #13</span><span class="chip ">Defense #13</span></div>
   
 </article>
-<p class="foot">Coming next: injuries, rotation age, offense/defense mismatches, matchup deep dives.</p>
+<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Coming next: rotation age.</p>
 </main></body></html>
