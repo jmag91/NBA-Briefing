@@ -122,13 +122,11 @@ def rest_and_travel(tid, abbr, today, season):
     prior = [g for g in hist if g["date"] < today]
     day = lambda k: today - timedelta(days=k)
 
-    # basic rest
     played_dates = {g["date"] for g in prior}
     b2b = day(1) in played_dates
     third_in_four = sum(day(k) in played_dates for k in (1, 2, 3)) >= 2
     days_off = (today - max(g["date"] for g in prior)).days - 1 if prior else None
 
-    # consecutive road games ending with most recent
     road_streak = 0
     for g in reversed(prior):
         if not g["home"]:
@@ -136,10 +134,7 @@ def rest_and_travel(tid, abbr, today, season):
         else:
             break
 
-    # 4th road game in last 6 nights (looking at prior 5 days + today if road)
     recent_road = sum(1 for g in prior if not g["home"] and (today - g["date"]).days <= 5)
-
-    # previous game result (for letdown)
     prev = prior[-1] if prior else None
 
     return {
@@ -154,7 +149,7 @@ def rest_and_travel(tid, abbr, today, season):
 
 
 def form_summary(info):
-    """Compute last-10, streak, home/road, close-game, vs-winning from history."""
+    """Compute last-10, streak, home/road, close-game from history."""
     hist = info.get("hist") or []
     if not hist:
         return None
@@ -163,9 +158,7 @@ def form_summary(info):
     wins10 = sum(1 for g in last10 if g["win"])
     losses10 = len(last10) - wins10
 
-    # current streak
-    streak_w = 0
-    streak_l = 0
+    streak_w = streak_l = 0
     for g in reversed(hist):
         if g["win"]:
             if streak_l:
@@ -187,7 +180,6 @@ def form_summary(info):
     home_rec = f"{sum(g['win'] for g in home)}-{len(home)-sum(g['win'] for g in home)}" if home else "—"
     road_rec = f"{sum(g['win'] for g in road)}-{len(road)-sum(g['win'] for g in road)}" if road else "—"
 
-    # close games (margin <= 5)
     close = [g for g in hist if abs(g["margin"]) <= 5]
     close_rec = (f"{sum(g['win'] for g in close)}-{len(close)-sum(g['win'] for g in close)}"
                  if len(close) >= 3 else None)
@@ -199,17 +191,9 @@ def form_summary(info):
         "road": road_rec,
         "close": close_rec,
         "n_games": len(hist),
-    }        "streak": streak,
-        "home": home_rec,
-        "road": road_rec,
-        "close": close_rec,
-        "n_games": len(hist),
-    
+    }
 
 
-# ---------------------------------------------------------------------------
-# Revenge / rivalries (unchanged loaders)
-# ---------------------------------------------------------------------------
 def load_revenge():
     path = os.path.join(os.path.dirname(__file__) or ".", "data", "revenge.json")
     with open(path, encoding="utf-8") as f:
@@ -222,14 +206,10 @@ def load_rivalries():
         return json.load(f)
 
 
-# ---------------------------------------------------------------------------
-# Injuries (league-wide) + per-game officials (from summary)
-# ---------------------------------------------------------------------------
-_injuries_by_team = None   # abbr -> list of {name, status, comment}
+_injuries_by_team = None
 
 
 def load_injuries():
-    """Fetch current injury report. Returns dict abbr -> list of injury dicts."""
     global _injuries_by_team
     if _injuries_by_team is not None:
         return _injuries_by_team
@@ -239,15 +219,12 @@ def load_injuries():
     except Exception as e:
         print(f"WARNING: injuries fetch failed: {e}")
         return _injuries_by_team
-    # Map displayName -> abbr via a quick teams lookup if needed; ESPN uses full names
-    # Build a name->abbr map from known teams
     name_to_abbr = {}
     try:
         teams = get(f"{API}/teams")
         for t in teams["sports"][0]["leagues"][0]["teams"]:
             team = t["team"]
             abbr = team["abbreviation"]
-            # ESPN sometimes uses UTAH instead of UTA; normalize known quirks
             if abbr == "UTAH":
                 abbr = "UTA"
             name_to_abbr[norm(team["displayName"])] = abbr
@@ -259,7 +236,6 @@ def load_injuries():
         tname = entry.get("displayName") or ""
         abbr = name_to_abbr.get(norm(tname))
         if not abbr:
-            # try last word heuristic
             continue
         players = []
         for inj in entry.get("injuries") or []:
@@ -276,7 +252,6 @@ def load_injuries():
 
 
 def injury_block(a_abbr, h_abbr):
-    """Return (tags, html) for notable injuries on both sides."""
     inj = load_injuries()
     tags = []
     parts = []
@@ -291,14 +266,13 @@ def injury_block(a_abbr, h_abbr):
             parts.append(f'<div class="prof"><b>{escape(abbr)} OUT</b>{escape(names)}{escape(more)}</div>')
         if dtd and len(dtd) >= 3:
             tags.append(("injury", f"{abbr} {len(dtd)} day-to-day"))
-            if not outs:  # only add a line if we didn't already list OUTs
+            if not outs:
                 dnames = ", ".join(p["name"] for p in dtd[:4])
                 parts.append(f'<div class="prof"><b>{escape(abbr)} DTD</b>{escape(dnames)}</div>')
     return tags, "".join(parts)
 
 
 def fetch_officials(event_id):
-    """Best-effort referee crew from game summary. Returns list of names or []."""
     try:
         summary = get(f"{API}/summary?event={event_id}")
         officials = (summary.get("gameInfo") or {}).get("officials") or []
@@ -308,9 +282,6 @@ def fetch_officials(event_id):
         return []
 
 
-# ---------------------------------------------------------------------------
-# Rosters + ages
-# ---------------------------------------------------------------------------
 _rosters = {}
 _ages = {}
 AGE_GAP_TAG = 2.0
@@ -376,9 +347,6 @@ def rivalry_notes(a_team, h_team, rivalries):
     return f'<details><summary>Rivalry notes ({len(shown)})</summary><ul>{items}</ul></details>'
 
 
-# ---------------------------------------------------------------------------
-# Ratings (offense / defense) – unchanged core, still free
-# ---------------------------------------------------------------------------
 NBA_STATS = "https://stats.nba.com/stats/leaguedashteamstats"
 NBA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
@@ -390,7 +358,23 @@ BLEND_GAMES = 20
 
 
 def nba_stats_ratings(season_end):
-    params = {"Conference": "", "DateFrom": "", "DateTo": "", "Division": "", def espn_ratings(season_end):
+    params = {"Conference": "", "DateFrom": "", "DateTo": "", "Division": "", "GameScope": "", "GameSegment": "",
+              "LastNGames": 0, "LeagueID": "00", "Location": "", "MeasureType": "Advanced", "Month": 0,
+              "OpponentTeamID": 0, "Outcome": "", "PORound": 0, "PaceAdjust": "N", "PerMode": "PerGame",
+              "Period": 0, "PlayerExperience": "", "PlayerPosition": "", "PlusMinus": "N", "Rank": "N",
+              "Season": f"{season_end - 1}-{str(season_end)[2:]}", "SeasonSegment": "",
+              "SeasonType": "Regular Season", "ShotClockRange": "", "StarterBench": "", "TeamID": 0,
+              "TwoWay": 0, "VsConference": "", "VsDivision": ""}
+    req = urllib.request.Request(NBA_STATS + "?" + urllib.parse.urlencode(params), headers=NBA_HEADERS)
+    with urllib.request.urlopen(req, timeout=15) as r:
+        rs = json.load(r)["resultSets"][0]
+    h = rs["headers"]
+    i = {k: h.index(k) for k in ("TEAM_NAME", "GP", "OFF_RATING", "DEF_RATING")}
+    return {norm(row[i["TEAM_NAME"]]): (row[i["OFF_RATING"]], row[i["DEF_RATING"]], row[i["GP"]])
+            for row in rs["rowSet"] if row[i["GP"]]}
+
+
+def espn_ratings(season_end):
     data = get(f"https://site.api.espn.com/apis/v2/sports/basketball/nba/standings?season={season_end}")
     out = {}
     for conf in data.get("children", []):
@@ -484,15 +468,10 @@ def age_block(away, home):
     return tags, line
 
 
-# ---------------------------------------------------------------------------
-# Odds (best-effort – ESPN sometimes includes them)
-# ---------------------------------------------------------------------------
 def odds_line(comp):
-    """Return a short string like 'DAL -3.5 · O/U 224.5' or None."""
     odds = comp.get("odds")
     if not odds:
         return None
-    # odds can be a list or a dict depending on ESPN response shape
     if isinstance(odds, list) and odds:
         o = odds[0]
     elif isinstance(odds, dict):
@@ -509,9 +488,6 @@ def odds_line(comp):
     return " · ".join(parts) if parts else None
 
 
-# ---------------------------------------------------------------------------
-# Card building
-# ---------------------------------------------------------------------------
 def team_line(info, form):
     if info is None:
         return "Rest data unavailable"
@@ -546,24 +522,80 @@ def card(ev, today, season, revenge, rivalries, ratings):
     itags, inj_html = injury_block(a_abbr, h_abbr)
     tags += itags
 
-    # --- Fatigue / travel tags ---
     if (ai["b2b"] and ai["third_in_four"]
             and hi["days_off"] is not None and hi["days_off"] >= 1):
         tags.append(("fatigue", "Road B2B + 3rd in 4 nights vs. rested opponent"))
     elif ai["b2b"] and (hi["days_off"] or 0) >= 2:
         tags.append(("fatigue", f"Road B2B vs. {h_abbr} with {hi['days_off']} days rest"))
-    road_in_window = ai.get("recent_road_in_6", 0) + 1  # +1 for today's road game
+    road_in_window = ai.get("recent_road_in_6", 0) + 1
     if road_in_window >= 4:
         tags.append(("fatigue", f"{a_abbr} {road_in_window}th road game in 6 nights"))
 
-    # Altitude
     if h_abbr in ("DEN", "UTA") and a_abbr not in ("DEN", "UTA"):
         tags.append(("altitude", f"Altitude: {a_abbr} visits {h_abbr}"))
 
-    # West-to-east travel for a night game
     tip_dt = parse_dt(ev["date"]).astimezone(PT)
     if a_abbr in WEST_COAST and h_abbr not in WEST_COAST and tip_dt.hour >= 16:
-        tags.append(("travel", f"West-to-east: {a_abbr} CSS = """
+        tags.append(("travel", f"West-to-east: {a_abbr} plays night game in East"))
+
+    for r in revenge:
+        if {r["winner"], r["loser"]} == {a_abbr, h_abbr}:
+            tags.append(("revenge", f"Playoff revenge: {r['winner']} beat {r['loser']} {r['result']} ({r['round']})"))
+
+    for side_abbr, form in ((a_abbr, af), (h_abbr, hf)):
+        if form and form["n_games"] >= 5:
+            if form["streak"].startswith("L") and int(form["streak"][1:]) >= 3:
+                tags.append(("form", f"{side_abbr} on a {form['streak']} streak"))
+            if form["streak"].startswith("W") and int(form["streak"][1:]) >= 5:
+                tags.append(("form", f"{side_abbr} on a {form['streak']} streak"))
+
+    for side_info, side_abbr, other_abbr in ((ai, a_abbr, h_abbr), (hi, h_abbr, a_abbr)):
+        prev = side_info.get("prev")
+        if prev and prev["win"] and prev["margin"] >= 15 and side_info.get("days_off") == 1:
+            tags.append(("schedule", f"Possible letdown: {side_abbr} coming off +{int(prev['margin'])} win"))
+
+    rtags, prof = mismatch_tags(away, home, ratings)
+    atags, ageline = age_block(away, home)
+    tags += rtags + atags
+
+    line = odds_line(comp)
+    odds_html = f'<div class="prof"><b>Line</b>{escape(line)}</div>' if line else ""
+
+    def form_line(abbr, form):
+        if not form or form["n_games"] < 1:
+            return ""
+        bits = [f"L10 {form['last10']}", form["streak"], f"H {form['home']}", f"R {form['road']}"]
+        if form.get("close"):
+            bits.append(f"Close {form['close']}")
+        return f'<div class="prof"><b>{escape(abbr)} form</b>{" · ".join(bits)}</div>'
+
+    form_html = form_line(a_abbr, af) + form_line(h_abbr, hf)
+
+    crew = fetch_officials(ev["id"])
+    officials_html = ""
+    if crew:
+        officials_html = f'<div class="prof"><b>Officials</b>{escape(", ".join(crew))}</div>'
+
+    tip = tip_dt.strftime("%-I:%M %p PT")
+    tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
+    name = lambda c: escape(c["team"]["displayName"])
+    notes = rivalry_notes(away["team"], home["team"], rivalries)
+
+    return f"""<article class="card">
+  <div class="top"><span class="tip">{tip}</span>{tag_html}</div>
+  <h2>{name(away)} <small>at</small> {name(home)}</h2>
+  <dl><dt>{escape(a_abbr)}</dt><dd>{team_line(ai, af)}</dd><dt>{escape(h_abbr)}</dt><dd>{team_line(hi, hf)}</dd></dl>
+  {odds_html}
+  {prof}
+  {form_html}
+  {inj_html}
+  {ageline}
+  {officials_html}
+  {notes}
+</article>"""
+
+
+CSS = """
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
 --fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#f0eee6;--tipfg:#262624;
 --altitude:#ffd166;--travel:#78d5e3;--form:#c3a6ff;--schedule:#f4a261;--injury:#ff6b6b}
@@ -603,9 +635,8 @@ def main():
     for e in events:
         for c in e["competitions"][0]["competitors"]:
             roster_names(c["team"]["id"])
-            # pre-warm history cache
             team_history(c["team"]["id"], season)
-    load_injuries()  # pre-warm injury report
+    load_injuries()
     ratings = load_ratings(today)
     cards = "".join(card(e, today, season, revenge, rivalries, ratings) for e in events) or '<p class="empty">No NBA games today.</p>'
     foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN."
