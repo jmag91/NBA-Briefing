@@ -169,5 +169,171 @@
       ],
       "source_name": "Eurohoops (NBA release)",
       "source_url": "https://www.eurohoops.net/en/nba-news/1960825/nikola-jokic-sanction-denver-nuggets-nba-playoffs/"
+      ,
+  "DET-MIN": [
+    {
+      "date": "2025-03-30",
+      "type": "Fight / suspensions",
+      "summary": "Timberwolves 123, Pistons 104: Ron Holland II fouled Naz Reid, Reid confronted him, and Holland pushed Donte DiVincenzo, who shoved back. The two fell into spectators along the baseline, and Isaiah Stewart and Marcus Sasser then joined in. Five players and Pistons coach J.B. Bickerstaff were ejected. Stewart was suspended two games (partly for a history of unsportsmanlike acts), and Holland, Sasser, Reid and DiVincenzo one game each.",
+      "people": [
+        {
+          "name": "Isaiah Stewart",
+          "role": "player"
+        },
+        {
+          "name": "Ron Holland II",
+          "role": "player"
+        },
+        {
+          "name": "Ronald Holland II",
+          "role": "player"
+        },
+        {
+          "name": "Marcus Sasser",
+          "role": "player"
+        },
+        {
+          "name": "Naz Reid",
+          "role": "player"
+        },
+        {
+          "name": "Donte DiVincenzo",
+          "role": "player"
+        },
+        {
+          "name": "J.B. Bickerstaff",
+          "role": "coach"
+        }
+      ],
+      "source_name": "AP via ClickOnDetroit",
+      "source_url": "https://www.clickondetroit.com/sports/2025/04/01/nba-suspends-5-players-for-their-roles-in-pistons-timberwolves-altercation-that-spilled-into-stands/"
+    }
+  ],
+  "GS-MIN": [
+    {
+      "date": "2023-11-14",
+      "type": "Fight / suspension",
+      "summary": "Timberwolves 104, Warriors 101: Klay Thompson and Jaden McDaniels became entangled, Rudy Gobert wrapped up Thompson, and Draymond Green grabbed Gobert around the neck. Thompson and McDaniels were ejected, and Green was ejected on a Flagrant 2 and suspended five games, partly for his history of unsportsmanlike acts. Thompson, McDaniels and Gobert were each fined $25,000.",
+      "people": [
+        {
+          "name": "Draymond Green",
+          "role": "player"
+        },
+        {
+          "name": "Rudy Gobert",
+          "role": "player"
+        },
+        {
+          "name": "Jaden McDaniels",
+          "role": "player"
+        },
+        {
+          "name": "Klay Thompson",
+          "role": "player"
+        }
+      ],
+      "source_name": "NBA announcement via KSTP",
+      "source_url": "https://kstp.com/?p=2979027"
+    },
+    {
+      "date": "2025-05-10",
+      "type": "Player vs. officials",
+      "summary": "2025 conference semifinals, Game 3 (Timberwolves won 102-97): Draymond Green was fined $50,000 for an inappropriate comment questioning the integrity of game officials. The fine was announced May 14.",
+      "people": [
+        {
+          "name": "Draymond Green",
+          "role": "player"
+        }
+      ],
+      "source_name": "NBA official release",
+      "source_url": "https://official.nba.com/warriors-draymond-green-fined"
+    }
+  ],
+  "GS-PHX": [
+    {
+      "date": "2023-12-12",
+      "type": "Ejection / suspension",
+      "summary": "Suns 119, Warriors 116: Draymond Green spun around and struck Jusuf Nurkic in the face with his arm, dropping him, and was ejected. The league suspended him indefinitely, citing his repeated history of unsportsmanlike acts. Green said the hit was accidental.",
+      "people": [
+        {
+          "name": "Draymond Green",
+          "role": "player"
+        },
+        {
+          "name": "Jusuf Nurkic",
+          "role": "player"
+        }
+      ],
+      "source_name": "CNN via ABC17",
+      "source_url": "https://abc17news.com/?p=1255734"
+    }
+  ],
+  "IND-NY": [
+    {
+      "date": "2024-05-10",
+      "type": "Coach vs. officials",
+      "summary": "2024 East semifinals: Pacers coach Rick Carlisle was fined $35,000 for publicly criticizing the officiating and questioning the league's integrity after Game 2. He singled out an uncalled Josh Hart shove on Tyrese Haliburton, who was dealing with back problems.",
+      "people": [
+        {
+          "name": "Rick Carlisle",
+          "role": "coach"
+        },
+        {
+          "name": "Josh Hart",
+          "role": "player"
+        },
+        {
+          "name": "Tyrese Haliburton",
+          "role": "player"
+        }
+      ],
+      "source_name": "CBS Sports",
+      "source_url": "https://www.cbssports.com/nba/news/pacers-rick-carlisle-fined-35000-for-postgame-comments-after-game-2-loss-vs-knicks-in-nba-playoffs/"
+    },
+    {
+      "date": "2024-05-10",
+      "type": "Public feud",
+      "summary": "2024 East semifinals: Josh Hart called Carlisle's officiating complaints disrespectful to the Knicks. The Pacers had submitted 78 calls from Games 1 and 2 to the league office for review.",
+      "people": [
+        {
+          "name": "Josh Hart",
+          "role": "player"
+        },
+        {
+          "name": "Rick Carlisle",
+          "role": "coach"
+        }
+      ],
+      "source_name": "Sports Illustrated",
+      "source_url": "https://www.si.com/nba/knicks-josh-hart-rips-pacers-coach-rick-carlisle-over-officiating-complaints"
+    },
+    {
+      "date": "2024-05-14",
+      "type": "Scuffle",
+      "summary": "2024 East semifinals, Game 5: Donte DiVincenzo and Myles Turner scuffled and both received technicals. Isaiah Jackson, Alec Burks and Isaiah Hartenstein also got technicals in a separate flare-up. DiVincenzo said afterward the Pacers were trying to act like tough guys.",
+      "people": [
+        {
+          "name": "Donte DiVincenzo",
+          "role": "player"
+        },
+        {
+          "name": "Myles Turner",
+          "role": "player"
+        },
+        {
+          "name": "Isaiah Jackson",
+          "role": "player"
+        },
+        {
+          "name": "Alec Burks",
+          "role": "player"
+        },
+        {
+          "name": "Isaiah Hartenstein",
+          "role": "player"
+        }
+      ],
+      "source_name": "CBS Sports",
+      "source_url": "https://www.cbssports.com/
     }
   ]
