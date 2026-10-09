@@ -488,6 +488,66 @@ def odds_line(comp):
     return " · ".join(parts) if parts else None
 
 
+
+# ---------------------------------------------------------------------------
+# Crowd win % (Polymarket public API: free, no key). Price ~= implied win prob.
+# ---------------------------------------------------------------------------
+_crowd = None
+
+
+def load_crowd():
+    global _crowd
+    if _crowd is not None:
+        return _crowd
+    _crowd = []
+    try:
+        url = ("https://gamma-api.polymarket.com/events?tag_slug=nba&active=true"
+               "&closed=false&limit=200&order=startDate&ascending=false")
+        for ev in get(url):
+            st = ev.get("startTime") or ev.get("endDate")
+            for m in ev.get("markets") or []:
+                if m.get("sportsMarketType") != "moneyline":
+                    continue
+                outs, prices = m.get("outcomes"), m.get("outcomePrices")
+                if isinstance(outs, str):
+                    outs = json.loads(outs)
+                if isinstance(prices, str):
+                    prices = json.loads(prices)
+                if not st or not outs or not prices or len(outs) != 2:
+                    continue
+                p = [float(x) for x in prices]
+                if sum(p) <= 0:
+                    continue
+                _crowd.append({"start": parse_dt(st),
+                               "p": {norm(o): x / sum(p) for o, x in zip(outs, p)},
+                               "liq": float(m.get("liquidity") or 0)})
+    except Exception as e:
+        print(f"WARNING: crowd odds unavailable: {e}")
+    print(f"Crowd markets loaded: {len(_crowd)}")
+    return _crowd
+
+
+def crowd_block(ev, away, home):
+    """Returns (tags, html). Empty if no market found for this game."""
+    tip = parse_dt(ev["date"])
+    def key(t):
+        return norm(t["team"].get("name") or t["team"]["displayName"].split()[-1])
+    ka, kh = key(away), key(home)
+    for c in load_crowd():
+        if abs((c["start"] - tip).total_seconds()) > 12 * 3600:
+            continue
+        pa = next((v for k, v in c["p"].items() if k == ka or k.endswith(ka) or ka.endswith(k)), None)
+        ph = next((v for k, v in c["p"].items() if k == kh or k.endswith(kh) or kh.endswith(k)), None)
+        if pa is None or ph is None:
+            continue
+        aa, ha = away["team"]["abbreviation"], home["team"]["abbreviation"]
+        thin = " (thin market)" if c["liq"] < 1000 else ""
+        html = (f'<div class="prof"><b>Crowd</b>{escape(aa)} {pa*100:.0f}% &middot; {escape(ha)} {ph*100:.0f}% '
+                f'<span class="src">Polymarket{thin}, updated {datetime.now(PT).strftime("%-I:%M %p PT")}</span></div>')
+        return [], html
+    return [], ""
+
+
 def team_line(info, form):
     if info is None:
         return "Rest data unavailable"
@@ -560,6 +620,7 @@ def card(ev, today, season, revenge, rivalries, ratings):
 
     line = odds_line(comp)
     odds_html = f'<div class="prof"><b>Line</b>{escape(line)}</div>' if line else ""
+    _ct, crowd_html = crowd_block(ev, away, home)
 
     def form_line(abbr, form):
         if not form or form["n_games"] < 1:
@@ -586,6 +647,7 @@ def card(ev, today, season, revenge, rivalries, ratings):
   <h2>{name(away)} <small>at</small> {name(home)}</h2>
   <dl><dt>{escape(a_abbr)}</dt><dd>{team_line(ai, af)}</dd><dt>{escape(h_abbr)}</dt><dd>{team_line(hi, hf)}</dd></dl>
   {odds_html}
+  {crowd_html}
   {prof}
   {form_html}
   {inj_html}
@@ -614,7 +676,7 @@ border-radius:12px;padding:14px 16px;margin-bottom:18px}
 .fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}
 .lockdown{color:var(--lockdown)}.altitude{color:var(--altitude)}.travel{color:var(--travel)}
 .form{color:var(--form)}.schedule{color:var(--schedule)}.injury{color:var(--injury)}
-.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
+.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
@@ -637,9 +699,10 @@ def main():
             roster_names(c["team"]["id"])
             team_history(c["team"]["id"], season)
     load_injuries()
+    load_crowd()
     ratings = load_ratings(today)
     cards = "".join(card(e, today, season, revenge, rivalries, ratings) for e in events) or '<p class="empty">No NBA games today.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN."
+    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
