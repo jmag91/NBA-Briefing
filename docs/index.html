@@ -21,7 +21,7 @@ border-radius:12px;padding:14px 16px;margin-bottom:18px}
 .fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}
 .lockdown{color:var(--lockdown)}.altitude{color:var(--altitude)}.travel{color:var(--travel)}
 .form{color:var(--form)}.schedule{color:var(--schedule)}.injury{color:var(--injury)}
-.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
+.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
@@ -35,17 +35,19 @@ details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
   <h2>Houston Rockets <small>at</small> Dallas Mavericks</h2>
   <dl><dt>HOU</dt><dd>First game of the season</dd><dt>DAL</dt><dd>First game of the season</dd></dl>
   
+  
   <div class="prof"><b>HOU</b><span class="chip ">Offense #11</span><span class="chip elite">Defense #4</span></div><div class="prof"><b>DAL</b><span class="chip weak">Offense #22</span><span class="chip weak">Defense #25</span></div>
   
   <div class="prof"><b>DAL DTD</b>Marcus Sasser, P.J. Washington, Caleb Martin, Dereck Lively II</div>
   <div class="prof"><b>Avg age</b>HOU 27.7 &middot; DAL 25.6 &middot; gap 2.0 yrs (HOU older)</div>
-  <div class="prof"><b>Officials</b>Marat Kogut, Jacyn Goble, Andy Nagy, Matt Myers</div>
+  <div class="prof"><b>Officials</b>Marat Kogut, Jacyn Goble, Matt Myers, Andy Nagy</div>
   
 </article><article class="card">
   <div class="top"><span class="tip">5:00 PM PT</span><span class="tag injury">CHI 4 day-to-day</span><span class="tag mismatch">CHI elite offense (#9) vs. MEM bottom-10 defense (#26)</span></div>
   <h2>Memphis Grizzlies <small>at</small> Chicago Bulls</h2>
   <dl><dt>MEM</dt><dd>First game of the season</dd><dt>CHI</dt><dd>First game of the season</dd></dl>
   <div class="prof"><b>Line</b>CHI -2.5 · O/U 239.5</div>
+  <div class="prof"><b>Crowd</b>MEM 44% &middot; CHI 56% <span class="src">Polymarket, updated 11:09 AM PT</span></div>
   <div class="prof"><b>MEM</b><span class="chip ">Offense #15</span><span class="chip weak">Defense #26</span></div><div class="prof"><b>CHI</b><span class="chip elite">Offense #9</span><span class="chip weak">Defense #28</span></div>
   
   <div class="prof"><b>CHI DTD</b>Zach Collins, Jaylin Sellers, Tre Jones, Nic Claxton</div>
@@ -53,5 +55,5 @@ details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
   
   
 </article>
-<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN.</p>
+<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN. Crowd % is the Polymarket price, a rough signal when trading is thin.</p>
 </main></body></html>
