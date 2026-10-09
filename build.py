@@ -887,15 +887,18 @@ def card(ev, today, revenge, rivalries, ratings):
 
 
 CSS = """
-:root{--bg:#edf0f3;--card:#fff;--ink:#14202b;--mute:#5b6b7a;--line:#d5dce3;
---fatigue:#b3261e;--revenge:#6240b5;--mismatch:#0b6e5f;--lockdown:#1d5fb4;--weak:#9a5b00;--tip:#14202b;--tipfg:#fff}
-@media(prefers-color-scheme:dark){:root{--bg:#10161d;--card:#18212b;--ink:#e8edf2;--mute:#93a3b3;
---line:#2a3643;--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#e8edf2;--tipfg:#10161d}}
+:root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
+--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#f0eee6;--tipfg:#262624}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
 main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
-.sub{color:var(--mute);margin:0 0 20px}.card{background:var(--card);border:1px solid var(--line);
-border-radius:10px;padding:14px 16px;margin-bottom:12px}.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sub{color:var(--mute);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--glow);border-top:4px solid var(--glow);
+box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 22%,transparent),0 0 26px -4px color-mix(in srgb,var(--glow) 55%,transparent);
+border-radius:12px;padding:14px 16px;margin-bottom:18px}
+.card:nth-of-type(5n+1){--glow:#ff9f43}.card:nth-of-type(5n+2){--glow:#4dd0e1}.card:nth-of-type(5n+3){--glow:#ff6fb5}
+.card:nth-of-type(5n+4){--glow:#b6e35a}.card:nth-of-type(5n+5){--glow:#a78bfa}
+.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
 .fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}.lockdown{color:var(--lockdown)}
@@ -925,10 +928,10 @@ def main():
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NBA Morning Briefing</title>
+<title>JMAG'S NBA Daily Digest</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>{CSS}</style></head><body><main>
-<h1>NBA Morning Briefing</h1><p class="sub">{stamp} &middot; {len(events)} game{'s' if len(events) != 1 else ''}</p>
+<h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {len(events)} game{'s' if len(events) != 1 else ''}</p>
 {cards}
 <p class="foot">{foot}</p>
 </main></body></html>"""
