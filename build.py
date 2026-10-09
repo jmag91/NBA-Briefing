@@ -1,7 +1,21 @@
-"""NBA morning briefing builder - stage 1.
-Pulls today's slate from ESPN's public endpoints, checks schedule fatigue
-(checklist #1) and playoff revenge (checklist #2), and writes docs/index.html.
-Free: needs no API key and no extra packages.
+"""NBA Daily Digest builder.
+
+Pulls today's slate from ESPN public endpoints (no API key) and generates
+docs/index.html with:
+
+- Betting lines & totals (when ESPN provides them)
+- Schedule fatigue (B2B, 3-in-4, 4th road in 6 nights)
+- Travel context (west-to-east night games, altitude in DEN/UTA)
+- Playoff revenge matchups
+- Offense/defense rankings + mismatch / lockdown tags
+- Recent form (last 10, streak, home/road, close games) once enough games
+- Roster age gaps
+- Rivalry / incident notes filtered to current players
+- Simple letdown heuristics
+- Injury report (OUT players + notable day-to-day)
+- Referee crew (when ESPN has posted it)
+
+Designed to run free via GitHub Actions every morning.
 """
 import json, os, unicodedata, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
@@ -22,585 +36,6 @@ def norm(s):
     return " ".join(s.split())
 
 
-REVENGE_JSON = r'''[
- {
-  "winner": "DET",
-  "loser": "ORL",
-  "result": "4-3",
-  "round": "First Round"
- },
- {
-  "winner": "CLE",
-  "loser": "TOR",
-  "result": "4-3",
-  "round": "First Round"
- },
- {
-  "winner": "PHI",
-  "loser": "BOS",
-  "result": "4-3",
-  "round": "First Round"
- },
- {
-  "winner": "NY",
-  "loser": "ATL",
-  "result": "4-2",
-  "round": "First Round"
- },
- {
-  "winner": "OKC",
-  "loser": "PHX",
-  "result": "4-0",
-  "round": "First Round"
- },
- {
-  "winner": "LAL",
-  "loser": "HOU",
-  "result": "4-2",
-  "round": "First Round"
- },
- {
-  "winner": "SA",
-  "loser": "POR",
-  "result": "4-1",
-  "round": "First Round"
- },
- {
-  "winner": "MIN",
-  "loser": "DEN",
-  "result": "4-2",
-  "round": "First Round"
- },
- {
-  "winner": "NY",
-  "loser": "PHI",
-  "result": "4-0",
-  "round": "Second Round"
- },
- {
-  "winner": "CLE",
-  "loser": "DET",
-  "result": "4-3",
-  "round": "Second Round"
- },
- {
-  "winner": "OKC",
-  "loser": "LAL",
-  "result": "4-0",
-  "round": "Second Round"
- },
- {
-  "winner": "SA",
-  "loser": "MIN",
-  "result": "4-2",
-  "round": "Second Round"
- },
- {
-  "winner": "NY",
-  "loser": "CLE",
-  "result": "4-0",
-  "round": "Conference Finals"
- },
- {
-  "winner": "SA",
-  "loser": "OKC",
-  "result": "4-3",
-  "round": "Conference Finals"
- },
- {
-  "winner": "NY",
-  "loser": "SA",
-  "result": "4-1",
-  "round": "NBA Finals"
- }
-]'''
-
-RIVALRY_JSON = r'''{
- "ATL-MIN": [
-  {
-   "date": "2026-02-09",
-   "type": "Fight / ejections",
-   "summary": "Timberwolves 138-116: Mouhamed Gueye pushed Naz Reid from behind, Reid approached him, and the two grabbed each other's jerseys. Both got technicals and were ejected, and the league fined each $35,000.",
-   "people": [
-    {
-     "name": "Mouhamed Gueye",
-     "role": "player"
-    },
-    {
-     "name": "Naz Reid",
-     "role": "player"
-    }
-   ],
-   "source_name": "NBA official release",
-   "source_url": "https://official.nba.com/hawks-mouhamed-gueye-and-timberwolves-naz-reid-fined/"
-  }
- ],
- "ATL-NY": [
-  {
-   "date": "2026-04-30",
-   "type": "Fight / ejections",
-   "summary": "2026 first round, Game 6 (Knicks won 140-89): Mitchell Robinson and Dyson Daniels became entangled battling for position on a free throw, and both were given technicals and ejected. Onyeka Okongwu and Jalen Brunson helped separate them. The league fined Robinson $50,000, more than Daniels' $25,000, partly because of an inappropriate postgame social media post about the incident.",
-   "people": [
-    {
-     "name": "Mitchell Robinson",
-     "role": "player"
-    },
-    {
-     "name": "Dyson Daniels",
-     "role": "player"
-    },
-    {
-     "name": "Onyeka Okongwu",
-     "role": "player"
-    },
-    {
-     "name": "Jalen Brunson",
-     "role": "player"
-    }
-   ],
-   "source_name": "AP via Atlanta News First",
-   "source_url": "https://www.atlantanewsfirst.com/2026/05/02/hawks-dyson-daniels-fined-25k-fighting-knicks-mitchell-robinson-game-6-loss/"
-  }
- ],
- "BOS-PHI": [
-  {
-   "date": "2026-05-05",
-   "type": "Player vs. officials",
-   "summary": "After Boston's 109-100 Game 7 loss to the 76ers in the first round, Jaylen Brown said on a livestream that officials had an agenda to call fouls against him for pushing off and that some referees needed to be investigated. The league fined him $50,000. He had already been fined $35,000 in January for a similar rant.",
-   "people": [
-    {
-     "name": "Jaylen Brown",
-     "role": "player"
-    }
-   ],
-   "source_name": "AP via The Sun Chronicle",
-   "source_url": "https://www.thesunchronicle.com/sports/celtics-jaylen-brown-fined-50-000-by-the-nba-for-public-criticism-of-playoff-officiating/article_2b855851-976e-505e-9e99-689a998e90ba.html"
-  }
- ],
- "BOS-SA": [
-  {
-   "date": "2026-01-12",
-   "type": "Player vs. officials",
-   "summary": "Jaylen Brown was fined $35,000 for public criticism of the officiating, in comments to the press and on social media after Boston's 100-95 home loss to San Antonio on Jan. 10.",
-   "people": [
-    {
-     "name": "Jaylen Brown",
-     "role": "player"
-    }
-   ],
-   "source_name": "NBA official release",
-   "source_url": "https://official.nba.com/bostons-brown-fined/"
-  }
- ],
- "CHA-DET": [
-  {
-   "date": "2026-02-09",
-   "type": "Fight / suspensions",
-   "summary": "Pistons 110, Hornets 104: after Moussa Diabate fouled Jalen Duren in the third quarter, a fight broke out and all four players involved were ejected. Isaiah Stewart, who left the bench area to join in, was suspended seven games, partly because of his history of unsportsmanlike acts. Miles Bridges and Diabate got four games each, and Duren two games for initiating the altercation.",
-   "people": [
-    {
-     "name": "Isaiah Stewart",
-     "role": "player"
-    },
-    {
-     "name": "Miles Bridges",
-     "role": "player"
-    },
-    {
-     "name": "Moussa Diabate",
-     "role": "player"
-    },
-    {
-     "name": "Jalen Duren",
-     "role": "player"
-    }
-   ],
-   "source_name": "NBA official release",
-   "source_url": "https://official.nba.com/nba-announces-penalties-from-pistons-hornets-game/"
-  }
- ],
- "CLE-PHX": [
-  {
-   "date": "2026-01-31",
-   "type": "Coach vs. official",
-   "summary": "Cavaliers coach Kenny Atkinson was fined $50,000 for aggressively pursuing, berating and making inadvertent contact with an official during Cleveland's loss to the Suns on Jan. 30. He was upset about a no-call on a defensive play near the perimeter.",
-   "people": [
-    {
-     "name": "Kenny Atkinson",
-     "role": "coach"
-    }
-   ],
-   "source_name": "AP via Yuma Sun",
-   "source_url": "https://www.yumasun.com/sports/cavaliers-coach-kenny-atkinson-fined-50k-for-actions-following-ejection-in-loss-vs-suns/article_aa1f0fc9-cc30-54c9-8346-32609a0222c7.html"
-  }
- ],
- "DEN-LAC": [
-  {
-   "date": "2025-04-26",
-   "type": "Scuffle",
-   "summary": "2025 first round, Game 4: Clippers guard James Harden and Nuggets guard Christian Braun got into an altercation that drew in several players, with six technical fouls and no serious discipline. The league declined to suspend Nuggets forward Michael Porter Jr. for Game 5. Aaron Gordon won the game with a buzzer-beating dunk.",
-   "people": [
-    {
-     "name": "James Harden",
-     "role": "player"
-    },
-    {
-     "name": "Christian Braun",
-     "role": "player"
-    },
-    {
-     "name": "Michael Porter Jr.",
-     "role": "player"
-    },
-    {
-     "name": "Aaron Gordon",
-     "role": "player"
-    }
-   ],
-   "source_name": "Sports Illustrated (All Clippers)",
-   "source_url": "https://www.si.com/nba/clippers/news/nba-makes-decision-on-punishment-for-key-starter-in-clippers-nuggets-game-5-01jt19eb1w22"
-  }
- ],
- "DEN-MIN": [
-  {
-   "date": "2026-04-25",
-   "type": "Fight / ejections",
-   "summary": "2026 first round, Game 4 (Timberwolves won 112-96): in the final seconds, Nikola Jokic confronted and shoved Jaden McDaniels after McDaniels took an uncontested layup with the game decided. Julius Randle then shoved Bruce Brown. Jokic and Randle were ejected; the league fined Jokic $50,000 and Randle $35,000 and did not suspend either.",
-   "people": [
-    {
-     "name": "Nikola Jokic",
-     "role": "player"
-    },
-    {
-     "name": "Julius Randle",
-     "role": "player"
-    },
-    {
-     "name": "Jaden McDaniels",
-     "role": "player"
-    },
-    {
-     "name": "Bruce Brown",
-     "role": "player"
-    }
-   ],
-   "source_name": "Eurohoops (NBA release)",
-   "source_url": "https://www.eurohoops.net/en/nba-news/1960825/nikola-jokic-sanction-denver-nuggets-nba-playoffs/"
-  }
- ],
- "DET-MIN": [
-  {
-   "date": "2025-03-30",
-   "type": "Fight / suspensions",
-   "summary": "Timberwolves 123, Pistons 104: Ron Holland II fouled Naz Reid, Reid confronted him, and Holland pushed Donte DiVincenzo, who shoved back. The two fell into spectators along the baseline, and Isaiah Stewart and Marcus Sasser then joined in. Five players and Pistons coach J.B. Bickerstaff were ejected. Stewart was suspended two games (partly for a history of unsportsmanlike acts), and Holland, Sasser, Reid and DiVincenzo one game each.",
-   "people": [
-    {
-     "name": "Isaiah Stewart",
-     "role": "player"
-    },
-    {
-     "name": "Ron Holland II",
-     "role": "player"
-    },
-    {
-     "name": "Ronald Holland II",
-     "role": "player"
-    },
-    {
-     "name": "Marcus Sasser",
-     "role": "player"
-    },
-    {
-     "name": "Naz Reid",
-     "role": "player"
-    },
-    {
-     "name": "Donte DiVincenzo",
-     "role": "player"
-    },
-    {
-     "name": "J.B. Bickerstaff",
-     "role": "coach"
-    }
-   ],
-   "source_name": "AP via ClickOnDetroit",
-   "source_url": "https://www.clickondetroit.com/sports/2025/04/01/nba-suspends-5-players-for-their-roles-in-pistons-timberwolves-altercation-that-spilled-into-stands/"
-  }
- ],
- "GS-MIN": [
-  {
-   "date": "2023-11-14",
-   "type": "Fight / suspension",
-   "summary": "Timberwolves 104, Warriors 101: Klay Thompson and Jaden McDaniels became entangled, Rudy Gobert wrapped up Thompson, and Draymond Green grabbed Gobert around the neck. Thompson and McDaniels were ejected, and Green was ejected on a Flagrant 2 and suspended five games, partly for his history of unsportsmanlike acts. Thompson, McDaniels and Gobert were each fined $25,000.",
-   "people": [
-    {
-     "name": "Draymond Green",
-     "role": "player"
-    },
-    {
-     "name": "Rudy Gobert",
-     "role": "player"
-    },
-    {
-     "name": "Jaden McDaniels",
-     "role": "player"
-    },
-    {
-     "name": "Klay Thompson",
-     "role": "player"
-    }
-   ],
-   "source_name": "NBA announcement via KSTP",
-   "source_url": "https://kstp.com/?p=2979027"
-  },
-  {
-   "date": "2025-05-10",
-   "type": "Player vs. officials",
-   "summary": "2025 conference semifinals, Game 3 (Timberwolves won 102-97): Draymond Green was fined $50,000 for an inappropriate comment questioning the integrity of game officials. The fine was announced May 14.",
-   "people": [
-    {
-     "name": "Draymond Green",
-     "role": "player"
-    }
-   ],
-   "source_name": "NBA official release",
-   "source_url": "https://official.nba.com/warriors-draymond-green-fined"
-  }
- ],
- "GS-PHX": [
-  {
-   "date": "2023-12-12",
-   "type": "Ejection / suspension",
-   "summary": "Suns 119, Warriors 116: Draymond Green spun around and struck Jusuf Nurkic in the face with his arm, dropping him, and was ejected. The league suspended him indefinitely, citing his repeated history of unsportsmanlike acts. Green said the hit was accidental.",
-   "people": [
-    {
-     "name": "Draymond Green",
-     "role": "player"
-    },
-    {
-     "name": "Jusuf Nurkic",
-     "role": "player"
-    }
-   ],
-   "source_name": "CNN via ABC17",
-   "source_url": "https://abc17news.com/?p=1255734"
-  }
- ],
- "IND-NY": [
-  {
-   "date": "2024-05-10",
-   "type": "Coach vs. officials",
-   "summary": "2024 East semifinals: Pacers coach Rick Carlisle was fined $35,000 for publicly criticizing the officiating and questioning the league's integrity after Game 2. He singled out an uncalled Josh Hart shove on Tyrese Haliburton, who was dealing with back problems.",
-   "people": [
-    {
-     "name": "Rick Carlisle",
-     "role": "coach"
-    },
-    {
-     "name": "Josh Hart",
-     "role": "player"
-    },
-    {
-     "name": "Tyrese Haliburton",
-     "role": "player"
-    }
-   ],
-   "source_name": "CBS Sports",
-   "source_url": "https://www.cbssports.com/nba/news/pacers-rick-carlisle-fined-35000-for-postgame-comments-after-game-2-loss-vs-knicks-in-nba-playoffs/"
-  },
-  {
-   "date": "2024-05-10",
-   "type": "Public feud",
-   "summary": "2024 East semifinals: Josh Hart called Carlisle's officiating complaints disrespectful to the Knicks. The Pacers had submitted 78 calls from Games 1 and 2 to the league office for review.",
-   "people": [
-    {
-     "name": "Josh Hart",
-     "role": "player"
-    },
-    {
-     "name": "Rick Carlisle",
-     "role": "coach"
-    }
-   ],
-   "source_name": "Sports Illustrated",
-   "source_url": "https://www.si.com/nba/knicks-josh-hart-rips-pacers-coach-rick-carlisle-over-officiating-complaints"
-  },
-  {
-   "date": "2024-05-14",
-   "type": "Scuffle",
-   "summary": "2024 East semifinals, Game 5: Donte DiVincenzo and Myles Turner scuffled and both received technicals. Isaiah Jackson, Alec Burks and Isaiah Hartenstein also got technicals in a separate flare-up. DiVincenzo said afterward the Pacers were trying to act like tough guys.",
-   "people": [
-    {
-     "name": "Donte DiVincenzo",
-     "role": "player"
-    },
-    {
-     "name": "Myles Turner",
-     "role": "player"
-    },
-    {
-     "name": "Isaiah Jackson",
-     "role": "player"
-    },
-    {
-     "name": "Alec Burks",
-     "role": "player"
-    },
-    {
-     "name": "Isaiah Hartenstein",
-     "role": "player"
-    }
-   ],
-   "source_name": "CBS Sports",
-   "source_url": "https://www.cbssports.com/nba/news/knicks-donte-divincenzo-says-pacers-are-trying-to-be-tough-guys-after-game-5-altercation-with-myles-turner/"
-  },
-  {
-   "date": "2025-05-21",
-   "type": "Trash talk",
-   "summary": "2025 East finals, Game 1: Tyrese Haliburton copied Reggie Miller's choke celebration after a game-tying shot that forced overtime. Indiana won 138-135 in overtime.",
-   "people": [
-    {
-     "name": "Tyrese Haliburton",
-     "role": "player"
-    }
-   ],
-   "source_name": "ESPN (via 101.7 The Team)",
-   "source_url": "https://www.1017theteam.com/news/%f0%9f%91%8a-haliburton-choke-latest-in-pacers-knicks-beef"
-  }
- ],
- "LAL-NY": [
-  {
-   "date": "2026-03-08",
-   "type": "Player vs. official",
-   "summary": "Luka Doncic was fined $50,000 for rubbing his fingers together in a money gesture toward an official after not getting a charge call in the Lakers' 110-97 win. LA Magazine identified the official as Tre Maddox. Doncic had 15 technical fouls at the time, one short of an automatic one-game suspension.",
-   "people": [
-    {
-     "name": "Luka Doncic",
-     "role": "player"
-    },
-    {
-     "name": "Tre Maddox",
-     "role": "referee"
-    }
-   ],
-   "source_name": "NBA official release",
-   "source_url": "https://official.nba.com/lakers-doncic-fined"
-  }
- ],
- "NY-PHI": [
-  {
-   "date": "2024-04-23",
-   "type": "Coach vs. officials",
-   "summary": "2024 first round: after losing Games 1 and 2 in New York, the 76ers said they planned to file a grievance over the officiating. Joel Embiid said Tyrese Maxey was fouled on the play that led to the Knicks' go-ahead steal in Game 2 and called the officiating unacceptable.",
-   "people": [
-    {
-     "name": "Joel Embiid",
-     "role": "player"
-    },
-    {
-     "name": "Tyrese Maxey",
-     "role": "player"
-    },
-    {
-     "name": "Nick Nurse",
-     "role": "coach"
-    }
-   ],
-   "source_name": "AP via TSN",
-   "source_url": "https://www.tsn.ca/nba/76ers-plan-to-file-grievance-about-officiating-during-first-two-games-of-series-against-knicks-1.2108224"
-  },
-  {
-   "date": "2024-04-25",
-   "type": "Flagrant foul",
-   "summary": "2024 first round, Game 3: Joel Embiid got a flagrant 1 for grabbing the legs of Mitchell Robinson, and also appeared to strike Robinson in the groin on a shot. Donte DiVincenzo called the play dirty and Josh Hart called it reckless.",
-   "people": [
-    {
-     "name": "Joel Embiid",
-     "role": "player"
-    },
-    {
-     "name": "Mitchell Robinson",
-     "role": "player"
-    },
-    {
-     "name": "Donte DiVincenzo",
-     "role": "player"
-    },
-    {
-     "name": "Josh Hart",
-     "role": "player"
-    }
-   ],
-   "source_name": "USA Today via Yahoo",
-   "source_url": "https://au.sports.yahoo.com/york-knicks-call-joel-embiids-053013638.html"
-  },
-  {
-   "date": "2024-04-30",
-   "type": "Flagrant foul",
-   "summary": "2024 first round, Game 5: Embiid was assessed a flagrant 1 on review for a smack across Jalen Brunson's face. Philadelphia won 112-106 in overtime to force a Game 6.",
-   "people": [
-    {
-     "name": "Joel Embiid",
-     "role": "player"
-    },
-    {
-     "name": "Jalen Brunson",
-     "role": "player"
-    }
-   ],
-   "source_name": "Sportskeeda",
-   "source_url": "https://sportskeeda.com/basketball/news-playing-draymond-defense-playoffs-nba-fans-berate-dirty-joel-embiid-wild-smack-across-jalen-brunson-s-face"
-  }
- ],
- "OKC-PHX": [
-  {
-   "date": "2026-04-23",
-   "type": "Player vs. officials",
-   "summary": "2026 first round: Devin Booker was fined $35,000 for public criticism of the officiating after Phoenix's Game 2 loss in Oklahoma City. The Thunder went on to sweep the series.",
-   "people": [
-    {
-     "name": "Devin Booker",
-     "role": "player"
-    }
-   ],
-   "source_name": "AP via Daily Courier",
-   "source_url": "https://www.dcourier.com/sports/suns-guard-devin-booker-fined-35-000-for-public-criticism-of-officials-after-thunder-game/article_98b8619b-7b84-51fb-8148-18cc75d54acf.html"
-  }
- ],
- "OKC-WSH": [
-  {
-   "date": "2026-03-21",
-   "type": "Fight / suspensions",
-   "summary": "Late in the first half of Oklahoma City's 132-111 win, Jaylin Williams and Justin Champagnie began shoving under the basket, Anthony Gill and Ajay Mitchell joined in, and the scuffle spilled into the seating area. Champagnie, Williams, Mitchell and Cason Wallace were ejected. Mitchell and Champagnie were suspended one game each; Williams was fined $50,000 and Wallace and Gill $35,000 each.",
-   "people": [
-    {
-     "name": "Justin Champagnie",
-     "role": "player"
-    },
-    {
-     "name": "Ajay Mitchell",
-     "role": "player"
-    },
-    {
-     "name": "Jaylin Williams",
-     "role": "player"
-    },
-    {
-     "name": "Cason Wallace",
-     "role": "player"
-    },
-    {
-     "name": "Anthony Gill",
-     "role": "player"
-    }
-   ],
-   "source_name": "NBA official release",
-   "source_url": "https://official.nba.com/nba-announces-penalties-from-thunder-wizards-game"
-  }
- ]
-}'''
-
-
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
@@ -611,50 +46,277 @@ def parse_dt(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
-def team_games(tid, season):
-    """Every regular-season game for a team as {et_date: played_on_road}."""
-    data = get(f"{API}/teams/{tid}/schedule?season={season}&seasontype=2")
-    out = {}
+# ---------------------------------------------------------------------------
+# Team meta: timezone + altitude (hardcoded, free, reliable)
+# ---------------------------------------------------------------------------
+TEAM_META = {
+    "ATL": ("America/New_York", False), "BOS": ("America/New_York", False),
+    "BKN": ("America/New_York", False), "CHA": ("America/New_York", False),
+    "CHI": ("America/Chicago", False),  "CLE": ("America/New_York", False),
+    "DAL": ("America/Chicago", False),  "DEN": ("America/Denver", True),
+    "DET": ("America/New_York", False), "GS":  ("America/Los_Angeles", False),
+    "HOU": ("America/Chicago", False),  "IND": ("America/New_York", False),
+    "LAC": ("America/Los_Angeles", False), "LAL": ("America/Los_Angeles", False),
+    "MEM": ("America/Chicago", False),  "MIA": ("America/New_York", False),
+    "MIL": ("America/Chicago", False),  "MIN": ("America/Chicago", False),
+    "NO":  ("America/Chicago", False),  "NY":  ("America/New_York", False),
+    "OKC": ("America/Chicago", False),  "ORL": ("America/New_York", False),
+    "PHI": ("America/New_York", False), "PHX": ("America/Phoenix", False),
+    "POR": ("America/Los_Angeles", False), "SA":  ("America/Chicago", False),
+    "SAC": ("America/Los_Angeles", False), "TOR": ("America/Toronto", False),
+    "UTA": ("America/Denver", True),    "WSH": ("America/New_York", False),
+}
+
+WEST_COAST = {"GS", "LAC", "LAL", "POR", "SAC", "PHX"}  # for west-to-east travel
+
+
+# ---------------------------------------------------------------------------
+# Rich team schedule / form cache
+# ---------------------------------------------------------------------------
+_hist_cache = {}   # tid -> list of past game dicts (newest last)
+
+
+def team_history(tid, season):
+    """Full regular-season history for a team: list of dicts ordered by date.
+    Each: {date, home, win, margin, opp_id, opp_abbr, our_score, opp_score}
+    """
+    if tid in _hist_cache:
+        return _hist_cache[tid]
+    try:
+        data = get(f"{API}/teams/{tid}/schedule?season={season}&seasontype=2")
+    except Exception as e:
+        print(f"WARNING: schedule fetch failed for {tid}: {e}")
+        _hist_cache[tid] = []
+        return []
+    out = []
     for ev in data.get("events", []):
         comp = ev["competitions"][0]
+        status = comp.get("status", {}).get("type", {})
+        if not status.get("completed"):
+            continue
         me = next(c for c in comp["competitors"] if str(c["team"]["id"]) == str(tid))
-        out[parse_dt(ev["date"]).astimezone(ET).date()] = me["homeAway"] == "away"
+        opp = next(c for c in comp["competitors"] if str(c["team"]["id"]) != str(tid))
+        try:
+            our = float(me.get("score", {}).get("value") or me.get("score") or 0)
+            theirs = float(opp.get("score", {}).get("value") or opp.get("score") or 0)
+        except (TypeError, ValueError):
+            continue
+        out.append({
+            "date": parse_dt(ev["date"]).astimezone(ET).date(),
+            "home": me["homeAway"] == "home",
+            "win": bool(me.get("winner")),
+            "margin": our - theirs,
+            "opp_id": opp["team"]["id"],
+            "opp_abbr": opp["team"]["abbreviation"],
+            "our_score": our,
+            "opp_score": theirs,
+        })
+    out.sort(key=lambda g: g["date"])
+    _hist_cache[tid] = out
     return out
 
 
-def rest_info(tid, today):
-    season = today.year + 1 if today.month >= 8 else today.year
-    try:
-        if tid not in _cache:
-            _cache[tid] = team_games(tid, season)
-        games = _cache[tid]
-    except Exception as e:
-        print(f"WARNING: no schedule for team {tid}: {e}")
-        return None
-    prior = [d for d in games if d < today]
+def rest_and_travel(tid, abbr, today, season):
+    """Return rest/travel info dict used by team_line and tags."""
+    hist = team_history(tid, season)
+    prior = [g for g in hist if g["date"] < today]
     day = lambda k: today - timedelta(days=k)
+
+    # basic rest
+    played_dates = {g["date"] for g in prior}
+    b2b = day(1) in played_dates
+    third_in_four = sum(day(k) in played_dates for k in (1, 2, 3)) >= 2
+    days_off = (today - max(g["date"] for g in prior)).days - 1 if prior else None
+
+    # consecutive road games ending with most recent
+    road_streak = 0
+    for g in reversed(prior):
+        if not g["home"]:
+            road_streak += 1
+        else:
+            break
+
+    # 4th road game in last 6 nights (looking at prior 5 days + today if road)
+    recent_road = sum(1 for g in prior if not g["home"] and (today - g["date"]).days <= 5)
+
+    # previous game result (for letdown)
+    prev = prior[-1] if prior else None
+
     return {
-        "b2b": day(1) in games,
-        "third_in_four": sum(day(k) in games for k in (1, 2, 3)) >= 2,
-        "days_off": (today - max(prior)).days - 1 if prior else None,
+        "b2b": b2b,
+        "third_in_four": third_in_four,
+        "days_off": days_off,
+        "road_streak": road_streak,
+        "recent_road_in_6": recent_road,
+        "prev": prev,
+        "hist": prior,
     }
 
 
+def form_summary(info):
+    """Compute last-10, streak, home/road, close-game, vs-winning from history."""
+    hist = info.get("hist") or []
+    if not hist:
+        return None
+
+    last10 = hist[-10:]
+    wins10 = sum(1 for g in last10 if g["win"])
+    losses10 = len(last10) - wins10
+
+    # current streak
+    streak_w = 0
+    streak_l = 0
+    for g in reversed(hist):
+        if g["win"]:
+            if streak_l:
+                break
+            streak_w += 1
+        else:
+            if streak_w:
+                break
+            streak_l += 1
+    if streak_w:
+        streak = f"W{streak_w}"
+    elif streak_l:
+        streak = f"L{streak_l}"
+    else:
+        streak = "—"
+
+    home = [g for g in hist if g["home"]]
+    road = [g for g in hist if not g["home"]]
+    home_rec = f"{sum(g['win'] for g in home)}-{len(home)-sum(g['win'] for g in home)}" if home else "—"
+    road_rec = f"{sum(g['win'] for g in road)}-{len(road)-sum(g['win'] for g in road)}" if road else "—"
+
+    # close games (margin <= 5)
+    close = [g for g in hist if abs(g["margin"]) <= 5]
+    close_rec = (f"{sum(g['win'] for g in close)}-{len(close)-sum(g['win'] for g in close)}"
+                 if len(close) >= 3 else None)
+
+    return {
+        "last10": f"{wins10}-{losses10}",
+        "streak": streak,
+        "home": home_rec,
+        "road": road_rec,
+        "close": close_rec,
+        "n_games": len(hist),
+    }        "streak": streak,
+        "home": home_rec,
+        "road": road_rec,
+        "close": close_rec,
+        "n_games": len(hist),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Revenge / rivalries (unchanged loaders)
+# ---------------------------------------------------------------------------
 def load_revenge():
-    return json.loads(REVENGE_JSON)
+    path = os.path.join(os.path.dirname(__file__) or ".", "data", "revenge.json")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def load_rivalries():
-    return json.loads(RIVALRY_JSON)
+    path = os.path.join(os.path.dirname(__file__) or ".", "data", "rivalries.json")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
+# ---------------------------------------------------------------------------
+# Injuries (league-wide) + per-game officials (from summary)
+# ---------------------------------------------------------------------------
+_injuries_by_team = None   # abbr -> list of {name, status, comment}
+
+
+def load_injuries():
+    """Fetch current injury report. Returns dict abbr -> list of injury dicts."""
+    global _injuries_by_team
+    if _injuries_by_team is not None:
+        return _injuries_by_team
+    _injuries_by_team = {}
+    try:
+        data = get(f"{API}/injuries")
+    except Exception as e:
+        print(f"WARNING: injuries fetch failed: {e}")
+        return _injuries_by_team
+    # Map displayName -> abbr via a quick teams lookup if needed; ESPN uses full names
+    # Build a name->abbr map from known teams
+    name_to_abbr = {}
+    try:
+        teams = get(f"{API}/teams")
+        for t in teams["sports"][0]["leagues"][0]["teams"]:
+            team = t["team"]
+            abbr = team["abbreviation"]
+            # ESPN sometimes uses UTAH instead of UTA; normalize known quirks
+            if abbr == "UTAH":
+                abbr = "UTA"
+            name_to_abbr[norm(team["displayName"])] = abbr
+            name_to_abbr[norm(team["location"] + " " + team["name"])] = abbr
+            name_to_abbr[norm(team["name"])] = abbr
+    except Exception as e:
+        print(f"WARNING: teams map for injuries failed: {e}")
+    for entry in data.get("injuries", []):
+        tname = entry.get("displayName") or ""
+        abbr = name_to_abbr.get(norm(tname))
+        if not abbr:
+            # try last word heuristic
+            continue
+        players = []
+        for inj in entry.get("injuries") or []:
+            ath = inj.get("athlete") or {}
+            players.append({
+                "name": ath.get("displayName") or ath.get("shortName") or "?",
+                "status": inj.get("status") or "?",
+                "comment": (inj.get("shortComment") or inj.get("longComment") or "")[:160],
+            })
+        if players:
+            _injuries_by_team[abbr] = players
+    print(f"Injuries loaded for {len(_injuries_by_team)} teams")
+    return _injuries_by_team
+
+
+def injury_block(a_abbr, h_abbr):
+    """Return (tags, html) for notable injuries on both sides."""
+    inj = load_injuries()
+    tags = []
+    parts = []
+    for abbr in (a_abbr, h_abbr):
+        players = inj.get(abbr) or []
+        outs = [p for p in players if p["status"].lower() in ("out", "injured reserve", "out for season")]
+        dtd = [p for p in players if "day" in p["status"].lower()]
+        if outs:
+            names = ", ".join(p["name"] for p in outs[:5])
+            more = f" +{len(outs)-5}" if len(outs) > 5 else ""
+            tags.append(("injury", f"{abbr} OUT: {names}{more}"))
+            parts.append(f'<div class="prof"><b>{escape(abbr)} OUT</b>{escape(names)}{escape(more)}</div>')
+        if dtd and len(dtd) >= 3:
+            tags.append(("injury", f"{abbr} {len(dtd)} day-to-day"))
+            if not outs:  # only add a line if we didn't already list OUTs
+                dnames = ", ".join(p["name"] for p in dtd[:4])
+                parts.append(f'<div class="prof"><b>{escape(abbr)} DTD</b>{escape(dnames)}</div>')
+    return tags, "".join(parts)
+
+
+def fetch_officials(event_id):
+    """Best-effort referee crew from game summary. Returns list of names or []."""
+    try:
+        summary = get(f"{API}/summary?event={event_id}")
+        officials = (summary.get("gameInfo") or {}).get("officials") or []
+        return [o.get("displayName") or o.get("fullName") for o in officials if o.get("displayName") or o.get("fullName")]
+    except Exception as e:
+        print(f"WARNING: officials for {event_id}: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Rosters + ages
+# ---------------------------------------------------------------------------
 _rosters = {}
 _ages = {}
-AGE_GAP_TAG = 2.0       # tag a game when the two rosters differ by this many years or more
+AGE_GAP_TAG = 2.0
 
 
 def _age_of(p):
-    """Exact age in years from date of birth, falling back to ESPN's whole-number age."""
     dob = p.get("dateOfBirth")
     if dob:
         try:
@@ -666,7 +328,6 @@ def _age_of(p):
 
 
 def roster_names(tid):
-    """Lower-cased names of the players and head coach currently with a team."""
     if tid in _rosters:
         return _rosters[tid]
     try:
@@ -694,7 +355,6 @@ def roster_names(tid):
 
 
 def rivalry_notes(a_team, h_team, rivalries):
-    """Incidents for this matchup, kept only if an involved player is on either roster today."""
     key = "-".join(sorted([a_team["abbreviation"], h_team["abbreviation"]]))
     incidents = rivalries.get(key, [])
     print(f"Rivalry check {key}: {len(incidents)} incident(s) on file")
@@ -716,36 +376,21 @@ def rivalry_notes(a_team, h_team, rivalries):
     return f'<details><summary>Rivalry notes ({len(shown)})</summary><ul>{items}</ul></details>'
 
 
+# ---------------------------------------------------------------------------
+# Ratings (offense / defense) – unchanged core, still free
+# ---------------------------------------------------------------------------
 NBA_STATS = "https://stats.nba.com/stats/leaguedashteamstats"
 NBA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
     "Referer": "https://www.nba.com/", "Origin": "https://www.nba.com", "Accept": "application/json",
     "x-nba-stats-origin": "stats", "x-nba-stats-token": "true",
 }
-GOOD, BAD = 10, 10      # elite = top 10 in the league, bottom tier = bottom 10
-BLEND_GAMES = 20        # blend with last season until a team has played this many games
+GOOD, BAD = 10, 10
+BLEND_GAMES = 20
 
 
 def nba_stats_ratings(season_end):
-    """{team: (offensive rating, defensive rating, games)} from stats.nba.com. May be blocked from cloud servers."""
-    params = {"Conference": "", "DateFrom": "", "DateTo": "", "Division": "", "GameScope": "", "GameSegment": "",
-              "LastNGames": 0, "LeagueID": "00", "Location": "", "MeasureType": "Advanced", "Month": 0,
-              "OpponentTeamID": 0, "Outcome": "", "PORound": 0, "PaceAdjust": "N", "PerMode": "PerGame",
-              "Period": 0, "PlayerExperience": "", "PlayerPosition": "", "PlusMinus": "N", "Rank": "N",
-              "Season": f"{season_end - 1}-{str(season_end)[2:]}", "SeasonSegment": "",
-              "SeasonType": "Regular Season", "ShotClockRange": "", "StarterBench": "", "TeamID": 0,
-              "TwoWay": 0, "VsConference": "", "VsDivision": ""}
-    req = urllib.request.Request(NBA_STATS + "?" + urllib.parse.urlencode(params), headers=NBA_HEADERS)
-    with urllib.request.urlopen(req, timeout=15) as r:
-        rs = json.load(r)["resultSets"][0]
-    h = rs["headers"]
-    i = {k: h.index(k) for k in ("TEAM_NAME", "GP", "OFF_RATING", "DEF_RATING")}
-    return {norm(row[i["TEAM_NAME"]]): (row[i["OFF_RATING"]], row[i["DEF_RATING"]], row[i["GP"]])
-            for row in rs["rowSet"] if row[i["GP"]]}
-
-
-def espn_ratings(season_end):
-    """Fallback: points scored / allowed per game from ESPN standings (not pace-adjusted)."""
+    params = {"Conference": "", "DateFrom": "", "DateTo": "", "Division": "", def espn_ratings(season_end):
     data = get(f"https://site.api.espn.com/apis/v2/sports/basketball/nba/standings?season={season_end}")
     out = {}
     for conf in data.get("children", []):
@@ -759,7 +404,6 @@ def espn_ratings(season_end):
 
 
 def load_ratings(today):
-    """Rank every team's offense and defense, blending with last season early on."""
     season_end = today.year + 1 if today.month >= 8 else today.year
     try:
         cur, prior = nba_stats_ratings(season_end), nba_stats_ratings(season_end - 1)
@@ -804,7 +448,6 @@ def chip(label, rank, n):
 
 
 def mismatch_tags(away, home, ratings):
-    """Returns (tags, profile html) for elite-vs-bottom matchups and each team's league ranks."""
     if not ratings:
         return [], ""
     n, ranks = ratings["n"], ratings["ranks"]
@@ -826,7 +469,6 @@ def mismatch_tags(away, home, ratings):
 
 
 def age_block(away, home):
-    """Average roster age for both teams, the gap, and a tag when the gap is large."""
     a, h = _ages.get(away["team"]["id"]), _ages.get(home["team"]["id"])
     if not a or not h:
         return [], ""
@@ -842,7 +484,35 @@ def age_block(away, home):
     return tags, line
 
 
-def team_line(info):
+# ---------------------------------------------------------------------------
+# Odds (best-effort – ESPN sometimes includes them)
+# ---------------------------------------------------------------------------
+def odds_line(comp):
+    """Return a short string like 'DAL -3.5 · O/U 224.5' or None."""
+    odds = comp.get("odds")
+    if not odds:
+        return None
+    # odds can be a list or a dict depending on ESPN response shape
+    if isinstance(odds, list) and odds:
+        o = odds[0]
+    elif isinstance(odds, dict):
+        o = odds
+    else:
+        return None
+    details = o.get("details") or o.get("spread")
+    total = o.get("overUnder")
+    parts = []
+    if details:
+        parts.append(str(details))
+    if total is not None:
+        parts.append(f"O/U {total}")
+    return " · ".join(parts) if parts else None
+
+
+# ---------------------------------------------------------------------------
+# Card building
+# ---------------------------------------------------------------------------
+def team_line(info, form):
     if info is None:
         return "Rest data unavailable"
     bits = []
@@ -850,45 +520,53 @@ def team_line(info):
         bits.append("2nd night of a back-to-back")
     if info["third_in_four"]:
         bits.append("3rd game in 4 nights")
+    if info.get("recent_road_in_6", 0) >= 3:
+        bits.append(f"{info['recent_road_in_6']} road games in last 5 nights")
     if not bits:
         d = info["days_off"]
         bits.append("First game of the season" if d is None else f"{d} day{'s' if d != 1 else ''} rest")
-    return " &middot; ".join(bits)
+    if form and form["n_games"] >= 3:
+        bits.append(f"L10 {form['last10']} ({form['streak']})")
+    return " · ".join(bits)
 
 
-def card(ev, today, revenge, rivalries, ratings):
+def card(ev, today, season, revenge, rivalries, ratings):
     comp = ev["competitions"][0]
     side = {c["homeAway"]: c for c in comp["competitors"]}
     away, home = side["away"], side["home"]
-    ai, hi = rest_info(away["team"]["id"], today), rest_info(home["team"]["id"], today)
+    a_abbr, h_abbr = away["team"]["abbreviation"], home["team"]["abbreviation"]
+    a_id, h_id = away["team"]["id"], home["team"]["id"]
+
+    ai = rest_and_travel(a_id, a_abbr, today, season)
+    hi = rest_and_travel(h_id, h_abbr, today, season)
+    af = form_summary(ai)
+    hf = form_summary(hi)
+
     tags = []
-    if (ai and hi and ai["b2b"] and ai["third_in_four"]
+    itags, inj_html = injury_block(a_abbr, h_abbr)
+    tags += itags
+
+    # --- Fatigue / travel tags ---
+    if (ai["b2b"] and ai["third_in_four"]
             and hi["days_off"] is not None and hi["days_off"] >= 1):
-        tags.append(("fatigue", "Road back-to-back, 3rd in 4 nights, vs. rested opponent"))
-    a, h = away["team"]["abbreviation"], home["team"]["abbreviation"]
-    for r in revenge:
-        if {r["winner"], r["loser"]} == {a, h}:
-            tags.append(("revenge", f"Playoff revenge: {r['winner']} beat {r['loser']} {r['result']} ({r['round']})"))
-    rtags, prof = mismatch_tags(away, home, ratings)
-    atags, ageline = age_block(away, home)
-    tags += rtags + atags
-    tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
-    tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
-    name = lambda c: escape(c["team"]["displayName"])
-    notes = rivalry_notes(away["team"], home["team"], rivalries)
-    return f"""<article class="card">
-  <div class="top"><span class="tip">{tip}</span>{tag_html}</div>
-  <h2>{name(away)} <small>at</small> {name(home)}</h2>
-  <dl><dt>{escape(a)}</dt><dd>{team_line(ai)}</dd><dt>{escape(h)}</dt><dd>{team_line(hi)}</dd></dl>
-  {prof}
-  {ageline}
-  {notes}
-</article>"""
+        tags.append(("fatigue", "Road B2B + 3rd in 4 nights vs. rested opponent"))
+    elif ai["b2b"] and (hi["days_off"] or 0) >= 2:
+        tags.append(("fatigue", f"Road B2B vs. {h_abbr} with {hi['days_off']} days rest"))
+    road_in_window = ai.get("recent_road_in_6", 0) + 1  # +1 for today's road game
+    if road_in_window >= 4:
+        tags.append(("fatigue", f"{a_abbr} {road_in_window}th road game in 6 nights"))
 
+    # Altitude
+    if h_abbr in ("DEN", "UTA") and a_abbr not in ("DEN", "UTA"):
+        tags.append(("altitude", f"Altitude: {a_abbr} visits {h_abbr}"))
 
-CSS = """
+    # West-to-east travel for a night game
+    tip_dt = parse_dt(ev["date"]).astimezone(PT)
+    if a_abbr in WEST_COAST and h_abbr not in WEST_COAST and tip_dt.hour >= 16:
+        tags.append(("travel", f"West-to-east: {a_abbr} CSS = """
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
---fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#f0eee6;--tipfg:#262624}
+--fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#f0eee6;--tipfg:#262624;
+--altitude:#ffd166;--travel:#78d5e3;--form:#c3a6ff;--schedule:#f4a261;--injury:#ff6b6b}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
 main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
@@ -901,7 +579,9 @@ border-radius:12px;padding:14px 16px;margin-bottom:18px}
 .top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}.lockdown{color:var(--lockdown)}
+.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}
+.lockdown{color:var(--lockdown)}.altitude{color:var(--altitude)}.travel{color:var(--travel)}
+.form{color:var(--form)}.schedule{color:var(--schedule)}.injury{color:var(--injury)}
 .prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
@@ -915,6 +595,7 @@ details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
 def main():
     now = datetime.now(ET)
     today = now.date()
+    season = today.year + 1 if today.month >= 8 else today.year
     data = get(f"{API}/scoreboard?dates={today:%Y%m%d}")
     events = sorted(data.get("events", []), key=lambda e: e["date"])
     revenge = load_revenge()
@@ -922,9 +603,12 @@ def main():
     for e in events:
         for c in e["competitions"][0]["competitors"]:
             roster_names(c["team"]["id"])
+            # pre-warm history cache
+            team_history(c["team"]["id"], season)
+    load_injuries()  # pre-warm injury report
     ratings = load_ratings(today)
-    cards = "".join(card(e, today, revenge, rivalries, ratings) for e in events) or '<p class="empty">No NBA games today.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster."
+    cards = "".join(card(e, today, season, revenge, rivalries, ratings) for e in events) or '<p class="empty">No NBA games today.</p>'
+    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
