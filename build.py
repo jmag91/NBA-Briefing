@@ -204,7 +204,7 @@ def form_summary(info):
         "road": road_rec,
         "close": close_rec,
         "n_games": len(hist),
-    }
+    
 
 
 # ---------------------------------------------------------------------------
