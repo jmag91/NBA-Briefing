@@ -263,12 +263,12 @@ def injury_block(a_abbr, h_abbr):
             names = ", ".join(p["name"] for p in outs[:5])
             more = f" +{len(outs)-5}" if len(outs) > 5 else ""
             tags.append(("injury", f"{abbr} OUT: {names}{more}"))
-            parts.append(f'<div class="prof"><b>{escape(abbr)} OUT</b>{escape(names)}{escape(more)}</div>')
+            parts.append(f'<div class="prof m-injury"><b>{escape(abbr)} OUT</b>{escape(names)}{escape(more)}</div>')
         if dtd and len(dtd) >= 3:
             tags.append(("injury", f"{abbr} {len(dtd)} day-to-day"))
             if not outs:
                 dnames = ", ".join(p["name"] for p in dtd[:4])
-                parts.append(f'<div class="prof"><b>{escape(abbr)} DTD</b>{escape(dnames)}</div>')
+                parts.append(f'<div class="prof m-injury"><b>{escape(abbr)} DTD</b>{escape(dnames)}</div>')
     return tags, "".join(parts)
 
 
@@ -447,7 +447,7 @@ def mismatch_tags(away, home, ratings):
             tags.append(("mismatch", f"{xa} elite offense (#{rx[0]}) vs. {ya} bottom-{BAD} defense (#{ry[1]})"))
         if rx[1] <= GOOD and ry[0] > n - BAD:
             tags.append(("lockdown", f"{xa} elite defense (#{rx[1]}) vs. {ya} bottom-{BAD} offense (#{ry[0]})"))
-    row = lambda t, r: (f'<div class="prof"><b>{escape(t["team"]["abbreviation"])}</b>'
+    row = lambda t, r: (f'<div class="prof m-match"><b>{escape(t["team"]["abbreviation"])}</b>'
                         f'{chip("Offense", r[0], n)}{chip("Defense", r[1], n)}</div>')
     return tags, row(away, ra) + row(home, rh)
 
@@ -463,7 +463,7 @@ def age_block(away, home):
     tags = []
     if abs(gap) >= AGE_GAP_TAG:
         tags.append(("age", f"Age gap: {older} older by {abs(gap):.1f} yrs"))
-    line = (f'<div class="prof"><b>Avg age</b>{escape(aa)} {ma:.1f} &middot; {escape(ha)} {mh:.1f} '
+    line = (f'<div class="prof m-age"><b>Avg age</b>{escape(aa)} {ma:.1f} &middot; {escape(ha)} {mh:.1f} '
             f'&middot; gap {abs(gap):.1f} yrs ({escape(older)} older)</div>')
     return tags, line
 
@@ -530,6 +530,7 @@ def load_crowd():
 def crowd_block(ev, away, home):
     """Returns (tags, html). Empty if no market found for this game."""
     tip = parse_dt(ev["date"])
+    gm = f'{away["team"]["abbreviation"]} at {home["team"]["abbreviation"]}'
     def key(t):
         return norm(t["team"].get("name") or t["team"]["displayName"].split()[-1])
     ka, kh = key(away), key(home)
@@ -542,9 +543,11 @@ def crowd_block(ev, away, home):
             continue
         aa, ha = away["team"]["abbreviation"], home["team"]["abbreviation"]
         thin = " (thin market)" if c["liq"] < 1000 else ""
-        html = (f'<div class="prof"><b>Crowd</b>{escape(aa)} {pa*100:.0f}% &middot; {escape(ha)} {ph*100:.0f}% '
+        html = (f'<div class="prof m-crowd"><b>Crowd</b>{escape(aa)} {pa*100:.0f}% &middot; {escape(ha)} {ph*100:.0f}% '
                 f'<span class="src">Polymarket{thin}, updated {datetime.now(PT).strftime("%-I:%M %p PT")}</span></div>')
+        print(f"Crowd: {gm} -> {pa*100:.0f}/{ph*100:.0f} (liquidity ${c['liq']:,.0f})")
         return [], html
+    print(f"Crowd: no market for {gm}")
     return [], ""
 
 
@@ -619,7 +622,7 @@ def card(ev, today, season, revenge, rivalries, ratings):
     tags += rtags + atags
 
     line = odds_line(comp)
-    odds_html = f'<div class="prof"><b>Line</b>{escape(line)}</div>' if line else ""
+    odds_html = f'<div class="prof m-line"><b>Line</b>{escape(line)}</div>' if line else ""
     _ct, crowd_html = crowd_block(ev, away, home)
 
     def form_line(abbr, form):
@@ -628,14 +631,14 @@ def card(ev, today, season, revenge, rivalries, ratings):
         bits = [f"L10 {form['last10']}", form["streak"], f"H {form['home']}", f"R {form['road']}"]
         if form.get("close"):
             bits.append(f"Close {form['close']}")
-        return f'<div class="prof"><b>{escape(abbr)} form</b>{" · ".join(bits)}</div>'
+        return f'<div class="prof m-form"><b>{escape(abbr)} form</b>{" · ".join(bits)}</div>'
 
     form_html = form_line(a_abbr, af) + form_line(h_abbr, hf)
 
     crew = fetch_officials(ev["id"])
     officials_html = ""
     if crew:
-        officials_html = f'<div class="prof"><b>Officials</b>{escape(", ".join(crew))}</div>'
+        officials_html = f'<div class="prof m-ref"><b>Officials</b>{escape(", ".join(crew))}</div>'
 
     tip = tip_dt.strftime("%-I:%M %p PT")
     tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
@@ -659,8 +662,9 @@ def card(ev, today, season, revenge, rivalries, ratings):
 
 CSS = """
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
---fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#f0eee6;--tipfg:#262624;
---altitude:#ffd166;--travel:#78d5e3;--form:#c3a6ff;--schedule:#f4a261;--injury:#ff6b6b}
+--tip:#f0eee6;--tipfg:#262624;
+--c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
+--c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
 main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
@@ -673,16 +677,20 @@ border-radius:12px;padding:14px 16px;margin-bottom:18px}
 .top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}
-.lockdown{color:var(--lockdown)}.altitude{color:var(--altitude)}.travel{color:var(--travel)}
-.form{color:var(--form)}.schedule{color:var(--schedule)}.injury{color:var(--injury)}
-.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
+.fatigue,.schedule{color:var(--c-rest)}.altitude,.travel{color:var(--c-travel)}.injury{color:var(--c-injury)}
+.revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
+.m-match{--k:var(--c-match)}.m-injury{--k:var(--c-injury)}.m-age{--k:var(--c-age)}.m-line,.m-crowd{--k:var(--c-line)}
+.m-form{--k:var(--c-form)}.m-ref{--k:var(--c-ref)}
+.prof{border-left:3px solid var(--k,var(--line));padding-left:9px}.prof b{color:var(--k,var(--ink))}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:20px;font-size:.85rem;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
+.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--c-match);background:color-mix(in srgb,var(--c-match) 16%,transparent);border-color:currentColor;font-weight:600}.chip.weak{color:var(--c-match);border:1.5px dashed currentColor;font-weight:600;opacity:.8}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
 details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:600}
 details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
-details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
+summary{color:var(--c-rivalry)}details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 """
 
 
@@ -711,6 +719,10 @@ def main():
 <style>{CSS}</style></head><body><main>
 <h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {len(events)} game{'s' if len(events) != 1 else ''}</p>
 {cards}
+<div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
+<span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge &amp; rivalry</span>
+<span><i style="--k:var(--c-match)"></i>Matchups (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
+<span><i style="--k:var(--c-age)"></i>Age</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">{foot}</p>
 </main></body></html>"""
     os.makedirs("docs", exist_ok=True)
