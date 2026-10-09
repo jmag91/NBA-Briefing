@@ -528,9 +528,10 @@ def load_crowd():
     return _crowd
 
 
-def crowd_flow(cid):
-    """Real-money flow on a Polymarket market: {outcome: (dollars, buy_count)}.
-    Counts only BUY trades (money put in on that side). Empty dict if unavailable."""
+def crowd_flow(cid, sides):
+    """Real-money flow on a Polymarket market: {outcome: (dollars, trade_count)}.
+    A BUY of X counts for X. A SELL of X counts for the opponent, at the price of the
+    equivalent opposite share (1 - price). Empty dict if unavailable."""
     if not cid:
         return {}
     flow = {}
@@ -538,10 +539,16 @@ def crowd_flow(cid):
         for page in range(6):  # up to 3,000 trades
             rows = get(f"https://data-api.polymarket.com/trades?market={cid}&limit=500&offset={page * 500}")
             for t in rows:
-                if t.get("side") != "BUY":
-                    continue
-                d, n = flow.get(norm(t.get("outcome") or ""), (0.0, 0))
-                flow[norm(t.get("outcome") or "")] = (d + float(t["size"]) * float(t["price"]), n + 1)
+                o, size, price = norm(t.get("outcome") or ""), float(t["size"]), float(t["price"])
+                if t.get("side") == "BUY":
+                    target, dollars = o, size * price
+                else:
+                    others = [x for x in sides if x != o]
+                    if len(others) != 1:
+                        continue
+                    target, dollars = others[0], size * (1 - price)
+                d, n = flow.get(target, (0.0, 0))
+                flow[target] = (d + dollars, n + 1)
             if len(rows) < 500:
                 break
     except Exception as e:
@@ -565,13 +572,13 @@ def crowd_block(ev, away, home):
             continue
         aa, ha = away["team"]["abbreviation"], home["team"]["abbreviation"]
         thin = " (thin market)" if c["liq"] < 1000 else ""
-        flow = crowd_flow(c.get("cid"))
+        flow = crowd_flow(c.get("cid"), list(c["p"]))
         fa = next((v for k, v in flow.items() if k == ka or k.endswith(ka) or ka.endswith(k)), None)
         fh = next((v for k, v in flow.items() if k == kh or k.endswith(kh) or kh.endswith(k)), None)
         money = ""
         if fa and fh:
-            money = (f'<div class="prof m-crowd"><b>Crowd money</b>{escape(aa)} ${fa[0]:,.0f} ({fa[1]} bets) &middot; '
-                     f'{escape(ha)} ${fh[0]:,.0f} ({fh[1]} bets) <span class="src">Polymarket buys only</span></div>')
+            money = (f'<div class="prof m-crowd"><b>Crowd money</b>{escape(aa)} ${fa[0]:,.0f} ({fa[1]} trades) &middot; '
+                     f'{escape(ha)} ${fh[0]:,.0f} ({fh[1]} trades) <span class="src">Polymarket; sells count for the other side</span></div>')
         html = (f'<div class="prof m-crowd"><b>Crowd</b>{escape(aa)} {pa*100:.0f}% &middot; {escape(ha)} {ph*100:.0f}% '
                 f'<span class="src">Polymarket{thin}, updated {datetime.now(PT).strftime("%-I:%M %p PT")}</span></div>')
         print(f"Crowd: {gm} -> {pa*100:.0f}/{ph*100:.0f} (liquidity ${c['liq']:,.0f})")
