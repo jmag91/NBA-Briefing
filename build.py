@@ -649,6 +649,20 @@ def load_rivalries():
 
 
 _rosters = {}
+_ages = {}
+AGE_GAP_TAG = 2.0       # tag a game when the two rosters differ by this many years or more
+
+
+def _age_of(p):
+    """Exact age in years from date of birth, falling back to ESPN's whole-number age."""
+    dob = p.get("dateOfBirth")
+    if dob:
+        try:
+            born = datetime.strptime(dob[:10], "%Y-%m-%d").date()
+            return (datetime.now(ET).date() - born).days / 365.25
+        except ValueError:
+            pass
+    return p.get("age")
 
 
 def roster_names(tid):
@@ -661,12 +675,14 @@ def roster_names(tid):
         print(f"WARNING: no roster for team {tid}: {e}")
         _rosters[tid] = None
         return None
-    names, coaches = set(), []
+    names, coaches, ages = set(), [], []
     for a in data.get("athletes", []):
         for p in a.get("items", [a]):
             if p.get("displayName"):
                 names.add(norm(p["displayName"]))
+                ages.append(_age_of(p))
     n_players = len(names)
+    _ages[tid] = [x for x in ages if x]
     for c in data.get("coach", []):
         full = norm(f'{c.get("firstName", "")} {c.get("lastName", "")}')
         if full:
@@ -809,6 +825,23 @@ def mismatch_tags(away, home, ratings):
     return tags, row(away, ra) + row(home, rh)
 
 
+def age_block(away, home):
+    """Average roster age for both teams, the gap, and a tag when the gap is large."""
+    a, h = _ages.get(away["team"]["id"]), _ages.get(home["team"]["id"])
+    if not a or not h:
+        return [], ""
+    ma, mh = sum(a) / len(a), sum(h) / len(h)
+    aa, ha = away["team"]["abbreviation"], home["team"]["abbreviation"]
+    gap = ma - mh
+    older = aa if gap > 0 else ha
+    tags = []
+    if abs(gap) >= AGE_GAP_TAG:
+        tags.append(("age", f"Age gap: {older} older by {abs(gap):.1f} yrs"))
+    line = (f'<div class="prof"><b>Avg age</b>{escape(aa)} {ma:.1f} &middot; {escape(ha)} {mh:.1f} '
+            f'&middot; gap {abs(gap):.1f} yrs ({escape(older)} older)</div>')
+    return tags, line
+
+
 def team_line(info):
     if info is None:
         return "Rest data unavailable"
@@ -837,7 +870,8 @@ def card(ev, today, revenge, rivalries, ratings):
         if {r["winner"], r["loser"]} == {a, h}:
             tags.append(("revenge", f"Playoff revenge: {r['winner']} beat {r['loser']} {r['result']} ({r['round']})"))
     rtags, prof = mismatch_tags(away, home, ratings)
-    tags += rtags
+    atags, ageline = age_block(away, home)
+    tags += rtags + atags
     tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
     tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
     name = lambda c: escape(c["team"]["displayName"])
@@ -847,6 +881,7 @@ def card(ev, today, revenge, rivalries, ratings):
   <h2>{name(away)} <small>at</small> {name(home)}</h2>
   <dl><dt>{escape(a)}</dt><dd>{team_line(ai)}</dd><dt>{escape(h)}</dt><dd>{team_line(hi)}</dd></dl>
   {prof}
+  {ageline}
   {notes}
 </article>"""
 
@@ -863,7 +898,7 @@ main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-seri
 border-radius:10px;padding:14px 16px;margin-bottom:12px}.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.lockdown{color:var(--lockdown)}
+.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}.lockdown{color:var(--lockdown)}
 .prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
@@ -885,8 +920,8 @@ def main():
         for c in e["competitions"][0]["competitors"]:
             roster_names(c["team"]["id"])
     ratings = load_ratings(today)
-    cards = "".join(card(e, today, revenge, rivalries, ratings) for e in events)
-    foot = (ratings["note"] + " " if ratings else "") + "Coming next: rotation age." or '<p class="empty">No NBA games today.</p>'
+    cards = "".join(card(e, today, revenge, rivalries, ratings) for e in events) or '<p class="empty">No NBA games today.</p>'
+    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
