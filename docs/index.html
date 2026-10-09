@@ -4,8 +4,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
---fatigue:#ff8a80;--revenge:#b9a3ff;--mismatch:#5fd4bf;--lockdown:#8ab4ff;--weak:#ffb86b;--tip:#f0eee6;--tipfg:#262624;
---altitude:#ffd166;--travel:#78d5e3;--form:#c3a6ff;--schedule:#f4a261;--injury:#ff6b6b}
+--tip:#f0eee6;--tipfg:#262624;
+--c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
+--c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
 main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
@@ -18,16 +19,20 @@ border-radius:12px;padding:14px 16px;margin-bottom:18px}
 .top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}
-.lockdown{color:var(--lockdown)}.altitude{color:var(--altitude)}.travel{color:var(--travel)}
-.form{color:var(--form)}.schedule{color:var(--schedule)}.injury{color:var(--injury)}
-.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
+.fatigue,.schedule{color:var(--c-rest)}.altitude,.travel{color:var(--c-travel)}.injury{color:var(--c-injury)}
+.revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
+.m-match{--k:var(--c-match)}.m-injury{--k:var(--c-injury)}.m-age{--k:var(--c-age)}.m-line,.m-crowd{--k:var(--c-line)}
+.m-form{--k:var(--c-form)}.m-ref{--k:var(--c-ref)}
+.prof{border-left:3px solid var(--k,var(--line));padding-left:9px}.prof b{color:var(--k,var(--ink))}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:20px;font-size:.85rem;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
+.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--c-match);background:color-mix(in srgb,var(--c-match) 16%,transparent);border-color:currentColor;font-weight:600}.chip.weak{color:var(--c-match);border:1.5px dashed currentColor;font-weight:600;opacity:.8}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
 details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:600}
 details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
-details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
+summary{color:var(--c-rivalry)}details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 </style></head><body><main>
 <h1>JMAG'S NBA Daily Digest</h1><p class="sub">Friday, October 9, 2026 &middot; 2 games</p>
 <article class="card">
@@ -36,24 +41,28 @@ details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
   <dl><dt>HOU</dt><dd>First game of the season</dd><dt>DAL</dt><dd>First game of the season</dd></dl>
   
   
-  <div class="prof"><b>HOU</b><span class="chip ">Offense #11</span><span class="chip elite">Defense #4</span></div><div class="prof"><b>DAL</b><span class="chip weak">Offense #22</span><span class="chip weak">Defense #25</span></div>
+  <div class="prof m-match"><b>HOU</b><span class="chip ">Offense #11</span><span class="chip elite">Defense #4</span></div><div class="prof m-match"><b>DAL</b><span class="chip weak">Offense #22</span><span class="chip weak">Defense #25</span></div>
   
-  <div class="prof"><b>DAL DTD</b>Marcus Sasser, P.J. Washington, Caleb Martin, Dereck Lively II</div>
-  <div class="prof"><b>Avg age</b>HOU 27.7 &middot; DAL 25.6 &middot; gap 2.0 yrs (HOU older)</div>
-  <div class="prof"><b>Officials</b>Marat Kogut, Jacyn Goble, Matt Myers, Andy Nagy</div>
+  <div class="prof m-injury"><b>DAL DTD</b>Marcus Sasser, P.J. Washington, Caleb Martin, Dereck Lively II</div>
+  <div class="prof m-age"><b>Avg age</b>HOU 27.7 &middot; DAL 25.6 &middot; gap 2.0 yrs (HOU older)</div>
+  <div class="prof m-ref"><b>Officials</b>Marat Kogut, Jacyn Goble, Matt Myers, Andy Nagy</div>
   
 </article><article class="card">
   <div class="top"><span class="tip">5:00 PM PT</span><span class="tag injury">CHI 4 day-to-day</span><span class="tag mismatch">CHI elite offense (#9) vs. MEM bottom-10 defense (#26)</span></div>
   <h2>Memphis Grizzlies <small>at</small> Chicago Bulls</h2>
   <dl><dt>MEM</dt><dd>First game of the season</dd><dt>CHI</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>Line</b>CHI -2.5 · O/U 239.5</div>
-  <div class="prof"><b>Crowd</b>MEM 44% &middot; CHI 56% <span class="src">Polymarket, updated 11:09 AM PT</span></div>
-  <div class="prof"><b>MEM</b><span class="chip ">Offense #15</span><span class="chip weak">Defense #26</span></div><div class="prof"><b>CHI</b><span class="chip elite">Offense #9</span><span class="chip weak">Defense #28</span></div>
+  <div class="prof m-line"><b>Line</b>CHI -2.5 · O/U 239.5</div>
+  <div class="prof m-crowd"><b>Crowd</b>MEM 44% &middot; CHI 56% <span class="src">Polymarket, updated 11:19 AM PT</span></div>
+  <div class="prof m-match"><b>MEM</b><span class="chip ">Offense #15</span><span class="chip weak">Defense #26</span></div><div class="prof m-match"><b>CHI</b><span class="chip elite">Offense #9</span><span class="chip weak">Defense #28</span></div>
   
-  <div class="prof"><b>CHI DTD</b>Zach Collins, Jaylin Sellers, Tre Jones, Nic Claxton</div>
-  <div class="prof"><b>Avg age</b>MEM 24.5 &middot; CHI 25.3 &middot; gap 0.9 yrs (CHI older)</div>
+  <div class="prof m-injury"><b>CHI DTD</b>Zach Collins, Jaylin Sellers, Tre Jones, Nic Claxton</div>
+  <div class="prof m-age"><b>Avg age</b>MEM 24.5 &middot; CHI 25.3 &middot; gap 0.9 yrs (CHI older)</div>
   
   
 </article>
+<div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
+<span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge &amp; rivalry</span>
+<span><i style="--k:var(--c-match)"></i>Matchups (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
+<span><i style="--k:var(--c-age)"></i>Age</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN. Crowd % is the Polymarket price, a rough signal when trading is thin.</p>
 </main></body></html>
