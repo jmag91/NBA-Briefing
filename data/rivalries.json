@@ -169,7 +169,8 @@
       ],
       "source_name": "Eurohoops (NBA release)",
       "source_url": "https://www.eurohoops.net/en/nba-news/1960825/nikola-jokic-sanction-denver-nuggets-nba-playoffs/"
-      ,
+    }
+  ],
   "DET-MIN": [
     {
       "date": "2025-03-30",
@@ -334,6 +335,7 @@
         }
       ],
       "source_name": "CBS Sports",
-      "source_url": "https://www.cbssports.com/
+      "source_url": "https://www.cbssports.com/nba/news/knicks-donte-divincenzo-says-pacers-are-trying-to-be-tough-guys-after-game-5-altercation-with-myles-turner/"
     }
   ]
+}
