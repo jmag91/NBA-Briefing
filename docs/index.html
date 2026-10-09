@@ -14,7 +14,7 @@ main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-seri
 border-radius:10px;padding:14px 16px;margin-bottom:12px}.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
 .tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
-.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.lockdown{color:var(--lockdown)}
+.fatigue{color:var(--fatigue)}.revenge{color:var(--revenge)}.mismatch{color:var(--mismatch)}.age{color:var(--weak)}.lockdown{color:var(--lockdown)}
 .prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--mismatch);border-color:currentColor;font-weight:600}.chip.weak{color:var(--weak);border-color:currentColor;font-weight:600}
 h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
@@ -28,38 +28,44 @@ details a{color:var(--revenge)}details .kind{font-weight:600;color:var(--ink)}
   <div class="top"><span class="tip">4:00 PM PT</span></div>
   <h2>Boston Celtics <small>at</small> Cleveland Cavaliers</h2>
   <dl><dt>BOS</dt><dd>First game of the season</dd><dt>CLE</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>BOS</b><span class="chip ">Offense #19</span><span class="chip elite">Defense #1</span></div><div class="prof"><b>CLE</b><span class="chip elite">Offense #4</span><span class="chip ">Defense #17</span></div>
+  <div class="prof"><b>BOS</b><span class="chip ">Offense #17</span><span class="chip elite">Defense #1</span></div><div class="prof"><b>CLE</b><span class="chip elite">Offense #4</span><span class="chip ">Defense #17</span></div>
+  <div class="prof"><b>Avg age</b>BOS 26.8 &middot; CLE 26.4 &middot; gap 0.4 yrs (BOS older)</div>
   
 </article><article class="card">
-  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag mismatch">MIA elite offense (#1) vs. NO bottom-10 defense (#23)</span></div>
+  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag mismatch">MIA elite offense (#1) vs. NO bottom-10 defense (#24)</span><span class="tag age">Age gap: MIA older by 2.2 yrs</span></div>
   <h2>New Orleans Pelicans <small>at</small> Miami Heat</h2>
   <dl><dt>NO</dt><dd>First game of the season</dd><dt>MIA</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>NO</b><span class="chip ">Offense #16</span><span class="chip weak">Defense #23</span></div><div class="prof"><b>MIA</b><span class="chip elite">Offense #1</span><span class="chip weak">Defense #22</span></div>
+  <div class="prof"><b>NO</b><span class="chip ">Offense #16</span><span class="chip weak">Defense #24</span></div><div class="prof"><b>MIA</b><span class="chip elite">Offense #1</span><span class="chip weak">Defense #22</span></div>
+  <div class="prof"><b>Avg age</b>NO 25.4 &middot; MIA 27.6 &middot; gap 2.2 yrs (MIA older)</div>
   
 </article><article class="card">
-  <div class="top"><span class="tip">4:30 PM PT</span></div>
+  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag age">Age gap: PHI older by 2.3 yrs</span></div>
   <h2>Philadelphia 76ers <small>at</small> Brooklyn Nets</h2>
   <dl><dt>PHI</dt><dd>First game of the season</dd><dt>BKN</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>PHI</b><span class="chip ">Offense #11</span><span class="chip ">Defense #15</span></div><div class="prof"><b>BKN</b><span class="chip weak">Offense #30</span><span class="chip ">Defense #14</span></div>
+  <div class="prof"><b>PHI</b><span class="chip ">Offense #15</span><span class="chip ">Defense #15</span></div><div class="prof"><b>BKN</b><span class="chip weak">Offense #30</span><span class="chip ">Defense #13</span></div>
+  <div class="prof"><b>Avg age</b>PHI 26.6 &middot; BKN 24.3 &middot; gap 2.3 yrs (PHI older)</div>
   
 </article><article class="card">
-  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag lockdown">NY elite defense (#5) vs. WSH bottom-10 offense (#26)</span></div>
+  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag lockdown">NY elite defense (#5) vs. WSH bottom-10 offense (#26)</span><span class="tag age">Age gap: NY older by 2.5 yrs</span></div>
   <h2>Washington Wizards <small>at</small> New York Knicks</h2>
   <dl><dt>WSH</dt><dd>First game of the season</dd><dt>NY</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>WSH</b><span class="chip weak">Offense #26</span><span class="chip weak">Defense #30</span></div><div class="prof"><b>NY</b><span class="chip ">Offense #17</span><span class="chip elite">Defense #5</span></div>
+  <div class="prof"><b>WSH</b><span class="chip weak">Offense #26</span><span class="chip weak">Defense #29</span></div><div class="prof"><b>NY</b><span class="chip ">Offense #19</span><span class="chip elite">Defense #5</span></div>
+  <div class="prof"><b>Avg age</b>WSH 25.3 &middot; NY 27.8 &middot; gap 2.5 yrs (NY older)</div>
   
 </article><article class="card">
   <div class="top"><span class="tip">5:00 PM PT</span></div>
   <h2>Atlanta Hawks <small>at</small> San Antonio Spurs</h2>
   <dl><dt>ATL</dt><dd>First game of the season</dd><dt>SA</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>ATL</b><span class="chip elite">Offense #6</span><span class="chip ">Defense #20</span></div><div class="prof"><b>SA</b><span class="chip elite">Offense #3</span><span class="chip elite">Defense #6</span></div>
+  <div class="prof"><b>ATL</b><span class="chip elite">Offense #6</span><span class="chip ">Defense #20</span></div><div class="prof"><b>SA</b><span class="chip elite">Offense #3</span><span class="chip elite">Defense #9</span></div>
+  <div class="prof"><b>Avg age</b>ATL 25.8 &middot; SA 25.9 &middot; gap 0.2 yrs (SA older)</div>
   
 </article><article class="card">
-  <div class="top"><span class="tip">7:30 PM PT</span></div>
+  <div class="top"><span class="tip">7:45 PM PT</span></div>
   <h2>Sacramento Kings <small>at</small> Los Angeles Lakers</h2>
   <dl><dt>SAC</dt><dd>First game of the season</dd><dt>LAL</dt><dd>First game of the season</dd></dl>
-  <div class="prof"><b>SAC</b><span class="chip weak">Offense #29</span><span class="chip weak">Defense #28</span></div><div class="prof"><b>LAL</b><span class="chip ">Offense #13</span><span class="chip ">Defense #13</span></div>
+  <div class="prof"><b>SAC</b><span class="chip weak">Offense #29</span><span class="chip weak">Defense #28</span></div><div class="prof"><b>LAL</b><span class="chip ">Offense #12</span><span class="chip ">Defense #14</span></div>
+  <div class="prof"><b>Avg age</b>SAC 26.7 &middot; LAL 25.7 &middot; gap 1.0 yrs (SAC older)</div>
   
 </article>
-<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Coming next: rotation age.</p>
+<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Average age is the mean of every player on the roster.</p>
 </main></body></html>
