@@ -520,11 +520,33 @@ def load_crowd():
                     continue
                 _crowd.append({"start": parse_dt(st),
                                "p": {norm(o): x / sum(p) for o, x in zip(outs, p)},
-                               "liq": float(m.get("liquidity") or 0)})
+                               "liq": float(m.get("liquidity") or 0),
+                               "cid": m.get("conditionId")})
     except Exception as e:
         print(f"WARNING: crowd odds unavailable: {e}")
     print(f"Crowd markets loaded: {len(_crowd)}")
     return _crowd
+
+
+def crowd_flow(cid):
+    """Real-money flow on a Polymarket market: {outcome: (dollars, buy_count)}.
+    Counts only BUY trades (money put in on that side). Empty dict if unavailable."""
+    if not cid:
+        return {}
+    flow = {}
+    try:
+        for page in range(6):  # up to 3,000 trades
+            rows = get(f"https://data-api.polymarket.com/trades?market={cid}&limit=500&offset={page * 500}")
+            for t in rows:
+                if t.get("side") != "BUY":
+                    continue
+                d, n = flow.get(norm(t.get("outcome") or ""), (0.0, 0))
+                flow[norm(t.get("outcome") or "")] = (d + float(t["size"]) * float(t["price"]), n + 1)
+            if len(rows) < 500:
+                break
+    except Exception as e:
+        print(f"WARNING: crowd trades unavailable: {e}")
+    return flow
 
 
 def crowd_block(ev, away, home):
@@ -543,10 +565,17 @@ def crowd_block(ev, away, home):
             continue
         aa, ha = away["team"]["abbreviation"], home["team"]["abbreviation"]
         thin = " (thin market)" if c["liq"] < 1000 else ""
+        flow = crowd_flow(c.get("cid"))
+        fa = next((v for k, v in flow.items() if k == ka or k.endswith(ka) or ka.endswith(k)), None)
+        fh = next((v for k, v in flow.items() if k == kh or k.endswith(kh) or kh.endswith(k)), None)
+        money = ""
+        if fa and fh:
+            money = (f'<div class="prof m-crowd"><b>Crowd money</b>{escape(aa)} ${fa[0]:,.0f} ({fa[1]} bets) &middot; '
+                     f'{escape(ha)} ${fh[0]:,.0f} ({fh[1]} bets) <span class="src">Polymarket buys only</span></div>')
         html = (f'<div class="prof m-crowd"><b>Crowd</b>{escape(aa)} {pa*100:.0f}% &middot; {escape(ha)} {ph*100:.0f}% '
                 f'<span class="src">Polymarket{thin}, updated {datetime.now(PT).strftime("%-I:%M %p PT")}</span></div>')
         print(f"Crowd: {gm} -> {pa*100:.0f}/{ph*100:.0f} (liquidity ${c['liq']:,.0f})")
-        return [], html
+        return [], html + money
     print(f"Crowd: no market for {gm}")
     return [], ""
 
