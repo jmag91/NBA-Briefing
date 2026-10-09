@@ -1,12 +1,16 @@
-name: Daily NBA briefing
+name: NBA briefing
 
 on:
   schedule:
-    - cron: "0 15 * * *"   # 15:00 UTC = 8:00 AM PDT / 7:00 AM PST
-  workflow_dispatch:         # lets you run it by hand from the Actions tab
+    - cron: "0 * * * *"   # every hour, on the hour (UTC)
+  workflow_dispatch:       # run by hand from the Actions tab
 
 permissions:
   contents: write
+
+concurrency:
+  group: briefing
+  cancel-in-progress: true
 
 jobs:
   build:
