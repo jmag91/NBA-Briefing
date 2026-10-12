@@ -4,101 +4,159 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
---tip:#f0eee6;--tipfg:#262624;
 --c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
 --c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
-main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
-.sub{color:var(--mute);margin:0 0 20px}
-.card{background:var(--card);border:1px solid var(--glow);border-top:4px solid var(--glow);
-box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 22%,transparent),0 0 26px -4px color-mix(in srgb,var(--glow) 55%,transparent);
-border-radius:12px;padding:14px 16px;margin-bottom:18px}
-.card:nth-of-type(5n+1){--glow:#ff9f43}.card:nth-of-type(5n+2){--glow:#4dd0e1}.card:nth-of-type(5n+3){--glow:#ff6fb5}
-.card:nth-of-type(5n+4){--glow:#b6e35a}.card:nth-of-type(5n+5){--glow:#a78bfa}
-.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
-.tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Barlow",system-ui,sans-serif;
+padding:0 16px 48px}
+main{max-width:680px;margin:0 auto}
+.bar-top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);
+padding:max(12px,env(safe-area-inset-top)) 0 12px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+h1{font:700 1.7rem/1.1 "Barlow Condensed",sans-serif;margin:0}
+.sub{color:var(--mute);margin:2px 0 10px;font-size:.95rem}
+.pager{display:none;align-items:center;gap:10px}.js .pager{display:flex}
+.pager button{font:600 1rem "Barlow",sans-serif;color:var(--ink);background:var(--card);border:1.5px solid var(--line);
+border-radius:99px;padding:7px 18px;cursor:pointer;min-width:96px}
+.pager button:hover:not(:disabled){border-color:var(--ink)}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.count{flex:1;text-align:center;color:var(--mute);font-weight:600}
+.page{background:var(--card);border:1px solid color-mix(in srgb,var(--glow) 70%,transparent);border-top:4px solid var(--glow);
+border-radius:16px;padding:22px 20px 20px;
+box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6px color-mix(in srgb,var(--glow) 55%,transparent)}
+.js .page{display:none}.js .page.on{display:block}
+.page+.page{margin-top:22px}.js .page+.page{margin-top:0}
+.tip{display:inline-block;background:var(--ink);color:var(--bg);font-weight:600;font-size:.85rem;padding:2px 11px;border-radius:99px}
+.teams{display:grid;grid-template-columns:1fr minmax(5.5rem,auto) 1fr;gap:12px;align-items:baseline;margin:12px 0 4px}
+.t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0}.t.a{text-align:right}.t.h{text-align:left}
+.at{color:var(--mute);font-size:.95rem;text-align:center}
+.grp{margin-top:22px}
+.grp h3{font:600 1.05rem "Barlow",sans-serif;color:var(--k);margin:0 0 6px;padding-left:10px;border-left:3px solid var(--k)}
+.row{display:grid;grid-template-columns:1fr minmax(5.5rem,auto) 1fr;gap:12px;align-items:baseline;padding:7px 0;
+border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.row:last-child{border-bottom:0}
+.lab{color:var(--k);font-size:.88rem;text-align:center;font-weight:600}
+.v{font-size:1.02rem}.v.a{text-align:right}.v.h{text-align:left}
+.v small{display:block;color:var(--mute);font-size:.8rem}
+.chip{display:inline-block;padding:1px 10px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute);font-size:.92rem}
+.chip.elite{color:var(--c-match);background:color-mix(in srgb,var(--c-match) 16%,transparent);border-color:currentColor;font-weight:600}
+.chip.weak{color:var(--c-match);border:1.5px dashed currentColor;font-weight:600;opacity:.8}
+.flags{list-style:none;margin:0;padding:0}
+.flags li{display:flex;gap:10px;align-items:baseline;padding:5px 0;font-weight:600}
+.flags li i{flex:none;width:9px;height:9px;border-radius:50%;background:currentColor;transform:translateY(-1px)}
 .fatigue,.schedule{color:var(--c-rest)}.altitude,.travel{color:var(--c-travel)}.injury{color:var(--c-injury)}
 .revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
-.m-match{--k:var(--c-match)}.m-injury{--k:var(--c-injury)}.m-age{--k:var(--c-age)}.m-line,.m-crowd{--k:var(--c-line)}
-.m-form{--k:var(--c-form)}.m-ref{--k:var(--c-ref)}
-.prof{border-left:3px solid var(--k,var(--line));padding-left:9px}.prof b{color:var(--k,var(--ink))}
-.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:20px;font-size:.85rem;color:var(--mute)}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
-.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--c-match);background:color-mix(in srgb,var(--c-match) 16%,transparent);border-color:currentColor;font-weight:600}.chip.weak{color:var(--c-match);border:1.5px dashed currentColor;font-weight:600;opacity:.8}
-h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
-dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
-.empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
-details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:600}
+.calm{margin:0;color:var(--mute)}
+.bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--k) 22%,var(--bg));margin:4px 0 6px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--k);border-radius:99px 0 0 99px}
+.note{margin:16px 0 0;padding-left:10px;border-left:3px solid var(--k)}.note b{color:var(--k);margin-right:8px}
+.src{color:var(--mute);font-size:.82rem;margin:10px 0 0}
+details{margin-top:18px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;color:var(--c-rivalry)}
 details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
-summary{color:var(--c-rivalry)}details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
+details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
+.empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
+@media (max-width:480px){.t{font-size:1.45rem}.row{gap:8px}.page{padding:18px 14px}}
+@media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
+@keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 </style></head><body><main>
-<h1>JMAG'S NBA Daily Digest</h1><p class="sub">Monday, October 12, 2026 &middot; 5 games</p>
-<article class="card">
-  <div class="top"><span class="tip">1:00 PM PT</span><span class="tag injury">POR OUT: Shaedon Sharpe</span><span class="tag injury">POR 3 day-to-day</span><span class="tag age">Age gap: LON older by 2.9 yrs</span></div>
-  <h2>London Lions <small>at</small> Portland Trail Blazers</h2>
-  <dl><dt>LON</dt><dd>First game of the season</dd><dt>POR</dt><dd>First game of the season</dd></dl>
-  <div class="prof m-line"><b>Line</b>POR -36.5 · O/U 211.5</div>
+<div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">Monday, October 12, 2026 &middot; 5 games</p><div class="pager"><button id="back" type="button">&lsaquo; Back</button><span class="count" id="count"></span><button id="fwd" type="button">Forward &rsaquo;</button></div></div>
+<article class="page" data-i="0" style="--glow:#ff9f43">
+  <header class="match">
+    <span class="tip">1:00 PM PT</span>
+    <div class="teams"><h2 class="t a">London Lions</h2><span class="at">at</span><h2 class="t h">Portland Trail Blazers</h2></div>
+  </header>
+  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3><ul class="flags"><li class="age"><i></i>Age gap: LON older by 2.9 yrs</li></ul></section>
+  <section class="grp" style="--k:var(--c-rest)"><h3>Rest and schedule</h3><div class="row" style="--k:var(--c-rest)"><div class="v a">Season opener</div><div class="lab">Rest</div><div class="v h">Season opener</div></div></section>
   
   
+  <section class="grp" style="--k:var(--c-age)"><h3>Roster</h3><div class="row" style="--k:var(--c-age)"><div class="v a">29.0</div><div class="lab">Average age</div><div class="v h">26.1</div></div></section>
+  <section class="grp" style="--k:var(--c-injury)"><h3>Injuries</h3><div class="row" style="--k:var(--c-injury)"><div class="v a">None reported</div><div class="lab">Report</div><div class="v h">Out: Shaedon Sharpe<br>Day-to-day: Chris Youngblood<br>Day-to-day: Robert Williams III<br>Day-to-day: Damian Lillard</div></div></section>
   
-  <div class="prof m-injury"><b>POR OUT</b>Shaedon Sharpe</div>
-  <div class="prof m-age"><b>Avg age</b>LON 29.0 &middot; POR 26.1 &middot; gap 2.9 yrs (LON older)</div>
-  <div class="prof m-ref"><b>Officials</b>Zach Zarba, CJ Washington, Brent Haskill, Brian Forte, Sha&#x27;Rae Mitchell, Matt Kallio</div>
+  <p class="note" style="--k:var(--c-line)"><b>Line</b> POR -36.5 · O/U 212.5</p><p class="note" style="--k:var(--c-ref)"><b>Officials</b> Zach Zarba, CJ Washington, Brent Haskill, Brian Forte, Sha&#x27;Rae Mitchell, Matt Kallio</p>
+</article><article class="page" data-i="1" style="--glow:#4dd0e1">
+  <header class="match">
+    <span class="tip">4:00 PM PT</span>
+    <div class="teams"><h2 class="t a">Oklahoma City Thunder</h2><span class="at">at</span><h2 class="t h">Atlanta Hawks</h2></div>
+  </header>
+  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3><ul class="flags"><li class="mismatch"><i></i>OKC elite offense (#5) vs. ATL bottom-10 defense (#21)</li></ul></section>
+  <section class="grp" style="--k:var(--c-rest)"><h3>Rest and schedule</h3><div class="row" style="--k:var(--c-rest)"><div class="v a">Season opener</div><div class="lab">Rest</div><div class="v h">Season opener</div></div></section>
   
-</article><article class="card">
-  <div class="top"><span class="tip">4:00 PM PT</span><span class="tag injury">OKC 12 day-to-day</span><span class="tag injury">ATL OUT: Henri Veesaar</span><span class="tag injury">ATL 4 day-to-day</span><span class="tag mismatch">OKC elite offense (#5) vs. ATL bottom-10 defense (#21)</span></div>
-  <h2>Oklahoma City Thunder <small>at</small> Atlanta Hawks</h2>
-  <dl><dt>OKC</dt><dd>First game of the season</dd><dt>ATL</dt><dd>First game of the season</dd></dl>
-  <div class="prof m-line"><b>Line</b>ATL -5.5 · O/U 222.5</div>
-  <div class="prof m-crowd"><b>Crowd</b>OKC 34% &middot; ATL 66% <span class="src">Polymarket, updated 12:11 PM PT</span></div><div class="prof m-crowd"><b>Crowd money</b>OKC $132,315 (803 trades) &middot; ATL $177,999 (612 trades) <span class="src">Polymarket; sells count for the other side</span></div>
-  <div class="prof m-match"><b>OKC</b><span class="chip elite">Offense #5</span><span class="chip elite">Defense #2</span></div><div class="prof m-match"><b>ATL</b><span class="chip elite">Offense #4</span><span class="chip weak">Defense #21</span></div>
+  <section class="grp" style="--k:var(--c-match)"><h3>Matchup</h3><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip elite">#5</span><small>elite</small></div><div class="lab">Offense</div><div class="v h"><span class="chip elite">#4</span><small>elite</small></div></div><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip elite">#2</span><small>elite</small></div><div class="lab">Defense</div><div class="v h"><span class="chip weak">#21</span><small>bottom 10</small></div></div></section>
+  <section class="grp" style="--k:var(--c-age)"><h3>Roster</h3><div class="row" style="--k:var(--c-age)"><div class="v a">24.7</div><div class="lab">Average age</div><div class="v h">25.8</div></div></section>
+  <section class="grp" style="--k:var(--c-injury)"><h3>Injuries</h3><div class="row" style="--k:var(--c-injury)"><div class="v a">Day-to-day: Thomas Sorber<br>Day-to-day: Nikola Topic<br>Day-to-day: Chet Holmgren<br>Day-to-day: Jaylin Williams</div><div class="lab">Report</div><div class="v h">Out: Henri Veesaar<br>Day-to-day: Keshon Gilbert<br>Day-to-day: Dorian Finney-Smith<br>Day-to-day: Nickeil Alexander-Walker<br>Day-to-day: Mouhamed Gueye</div></div></section>
+  <section class="grp" style="--k:var(--c-line)"><h3>Market</h3><div class="bar" style="--k:var(--c-line)"><span style="width:34.2%"></span></div><div class="row" style="--k:var(--c-line)"><div class="v a">34%</div><div class="lab">Crowd win %</div><div class="v h">66%</div></div><div class="row" style="--k:var(--c-line)"><div class="v a">$132,352<small>807 trades</small></div><div class="lab">Crowd money</div><div class="v h">$177,999<small>612 trades</small></div></div></section>
+  <p class="note" style="--k:var(--c-line)"><b>Line</b> ATL -5.5 · O/U 222.5</p><p class="src">Crowd data: Polymarket &middot; updated 12:54 PM PT</p>
+</article><article class="page" data-i="2" style="--glow:#ff6fb5">
+  <header class="match">
+    <span class="tip">4:00 PM PT</span>
+    <div class="teams"><h2 class="t a">Brooklyn Nets</h2><span class="at">at</span><h2 class="t h">Washington Wizards</h2></div>
+  </header>
+  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3><p class="calm">No flags for this game.</p></section>
+  <section class="grp" style="--k:var(--c-rest)"><h3>Rest and schedule</h3><div class="row" style="--k:var(--c-rest)"><div class="v a">Season opener</div><div class="lab">Rest</div><div class="v h">Season opener</div></div></section>
   
-  <div class="prof m-injury"><b>OKC DTD</b>Thomas Sorber, Nikola Topic, Chet Holmgren, Jaylin Williams</div><div class="prof m-injury"><b>ATL OUT</b>Henri Veesaar</div>
-  <div class="prof m-age"><b>Avg age</b>OKC 24.7 &middot; ATL 25.8 &middot; gap 1.0 yrs (ATL older)</div>
+  <section class="grp" style="--k:var(--c-match)"><h3>Matchup</h3><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip weak">#30</span><small>bottom 10</small></div><div class="lab">Offense</div><div class="v h"><span class="chip weak">#26</span><small>bottom 10</small></div></div><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip ">#12</span></div><div class="lab">Defense</div><div class="v h"><span class="chip weak">#29</span><small>bottom 10</small></div></div></section>
+  <section class="grp" style="--k:var(--c-age)"><h3>Roster</h3><div class="row" style="--k:var(--c-age)"><div class="v a">24.3</div><div class="lab">Average age</div><div class="v h">25.3</div></div></section>
+  <section class="grp" style="--k:var(--c-injury)"><h3>Injuries</h3><div class="row" style="--k:var(--c-injury)"><div class="v a">Day-to-day: Joshua Jefferson<br>Day-to-day: Mikel Brown Jr.</div><div class="lab">Report</div><div class="v h">Out: Tristan Vukcevic<br>Out: Jamir Watkins<br>Day-to-day: Khris Middleton<br>Day-to-day: Tre Mann</div></div></section>
+  <section class="grp" style="--k:var(--c-line)"><h3>Market</h3><div class="bar" style="--k:var(--c-line)"><span style="width:41.5%"></span></div><div class="row" style="--k:var(--c-line)"><div class="v a">42%</div><div class="lab">Crowd win %</div><div class="v h">58%</div></div><div class="row" style="--k:var(--c-line)"><div class="v a">$561<small>51 trades</small></div><div class="lab">Crowd money</div><div class="v h">$2,387<small>60 trades</small></div></div></section>
+  <p class="note" style="--k:var(--c-line)"><b>Line</b> WSH -3.5 · O/U 222.5</p><p class="src">Crowd data: Polymarket &middot; updated 12:54 PM PT</p>
+</article><article class="page" data-i="3" style="--glow:#b6e35a">
+  <header class="match">
+    <span class="tip">4:30 PM PT</span>
+    <div class="teams"><h2 class="t a">Minnesota Timberwolves</h2><span class="at">at</span><h2 class="t h">New York Knicks</h2></div>
+  </header>
+  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3><ul class="flags"><li class="age"><i></i>Age gap: NY older by 2.3 yrs</li></ul></section>
+  <section class="grp" style="--k:var(--c-rest)"><h3>Rest and schedule</h3><div class="row" style="--k:var(--c-rest)"><div class="v a">Season opener</div><div class="lab">Rest</div><div class="v h">Season opener</div></div></section>
   
+  <section class="grp" style="--k:var(--c-match)"><h3>Matchup</h3><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip elite">#7</span><small>elite</small></div><div class="lab">Offense</div><div class="v h"><span class="chip ">#20</span></div></div><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip ">#14</span></div><div class="lab">Defense</div><div class="v h"><span class="chip elite">#4</span><small>elite</small></div></div></section>
+  <section class="grp" style="--k:var(--c-age)"><h3>Roster</h3><div class="row" style="--k:var(--c-age)"><div class="v a">25.6</div><div class="lab">Average age</div><div class="v h">27.8</div></div></section>
+  <section class="grp" style="--k:var(--c-injury)"><h3>Injuries</h3><div class="row" style="--k:var(--c-injury)"><div class="v a">Out: Donte DiVincenzo<br>Day-to-day: Jaden McDaniels<br>Day-to-day: Jonathan Kuminga<br>Day-to-day: Ayo Dosunmu<br>Day-to-day: Rudy Gobert</div><div class="lab">Report</div><div class="v h">None reported</div></div></section>
+  <section class="grp" style="--k:var(--c-line)"><h3>Market</h3><div class="bar" style="--k:var(--c-line)"><span style="width:48.5%"></span></div><div class="row" style="--k:var(--c-line)"><div class="v a">48%</div><div class="lab">Crowd win %</div><div class="v h">52%</div></div><div class="row" style="--k:var(--c-line)"><div class="v a">$9,769<small>92 trades</small></div><div class="lab">Crowd money</div><div class="v h">$5,554<small>116 trades</small></div></div></section>
+  <p class="note" style="--k:var(--c-line)"><b>Line</b> NY -1.5 · O/U 227.5</p><p class="src">Crowd data: Polymarket &middot; updated 12:54 PM PT</p>
+</article><article class="page" data-i="4" style="--glow:#a78bfa">
+  <header class="match">
+    <span class="tip">6:00 PM PT</span>
+    <div class="teams"><h2 class="t a">San Antonio Spurs</h2><span class="at">at</span><h2 class="t h">Utah Jazz</h2></div>
+  </header>
+  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3><ul class="flags"><li class="mismatch"><i></i>SA elite offense (#6) vs. UTAH bottom-10 defense (#30)</li></ul></section>
+  <section class="grp" style="--k:var(--c-rest)"><h3>Rest and schedule</h3><div class="row" style="--k:var(--c-rest)"><div class="v a">Season opener</div><div class="lab">Rest</div><div class="v h">Season opener</div></div></section>
   
-</article><article class="card">
-  <div class="top"><span class="tip">4:00 PM PT</span><span class="tag injury">WSH OUT: Tristan Vukcevic, Jamir Watkins</span></div>
-  <h2>Brooklyn Nets <small>at</small> Washington Wizards</h2>
-  <dl><dt>BKN</dt><dd>First game of the season</dd><dt>WSH</dt><dd>First game of the season</dd></dl>
-  <div class="prof m-line"><b>Line</b>WSH -3.5 · O/U 222.5</div>
-  <div class="prof m-crowd"><b>Crowd</b>BKN 42% &middot; WSH 57% <span class="src">Polymarket, updated 12:11 PM PT</span></div><div class="prof m-crowd"><b>Crowd money</b>BKN $524 (46 trades) &middot; WSH $2,320 (56 trades) <span class="src">Polymarket; sells count for the other side</span></div>
-  <div class="prof m-match"><b>BKN</b><span class="chip weak">Offense #30</span><span class="chip ">Defense #12</span></div><div class="prof m-match"><b>WSH</b><span class="chip weak">Offense #26</span><span class="chip weak">Defense #29</span></div>
-  
-  <div class="prof m-injury"><b>WSH OUT</b>Tristan Vukcevic, Jamir Watkins</div>
-  <div class="prof m-age"><b>Avg age</b>BKN 24.3 &middot; WSH 25.3 &middot; gap 1.0 yrs (WSH older)</div>
-  
-  
-</article><article class="card">
-  <div class="top"><span class="tip">4:30 PM PT</span><span class="tag injury">MIN OUT: Donte DiVincenzo</span><span class="tag injury">MIN 6 day-to-day</span><span class="tag age">Age gap: NY older by 2.3 yrs</span></div>
-  <h2>Minnesota Timberwolves <small>at</small> New York Knicks</h2>
-  <dl><dt>MIN</dt><dd>First game of the season</dd><dt>NY</dt><dd>First game of the season</dd></dl>
-  <div class="prof m-line"><b>Line</b>NY -1.5 · O/U 227.5</div>
-  <div class="prof m-crowd"><b>Crowd</b>MIN 48% &middot; NY 52% <span class="src">Polymarket, updated 12:11 PM PT</span></div><div class="prof m-crowd"><b>Crowd money</b>MIN $9,758 (89 trades) &middot; NY $5,346 (112 trades) <span class="src">Polymarket; sells count for the other side</span></div>
-  <div class="prof m-match"><b>MIN</b><span class="chip elite">Offense #7</span><span class="chip ">Defense #14</span></div><div class="prof m-match"><b>NY</b><span class="chip ">Offense #20</span><span class="chip elite">Defense #4</span></div>
-  
-  <div class="prof m-injury"><b>MIN OUT</b>Donte DiVincenzo</div>
-  <div class="prof m-age"><b>Avg age</b>MIN 25.6 &middot; NY 27.8 &middot; gap 2.3 yrs (NY older)</div>
-  
-  
-</article><article class="card">
-  <div class="top"><span class="tip">6:00 PM PT</span><span class="tag injury">SA OUT: Jayden Quaintance</span><span class="tag injury">SA 8 day-to-day</span><span class="tag mismatch">SA elite offense (#6) vs. UTAH bottom-10 defense (#30)</span></div>
-  <h2>San Antonio Spurs <small>at</small> Utah Jazz</h2>
-  <dl><dt>SA</dt><dd>First game of the season</dd><dt>UTAH</dt><dd>First game of the season</dd></dl>
-  <div class="prof m-line"><b>Line</b>UTAH -4.5 · O/U 226.5</div>
-  <div class="prof m-crowd"><b>Crowd</b>SA 36% &middot; UTAH 64% <span class="src">Polymarket, updated 12:11 PM PT</span></div><div class="prof m-crowd"><b>Crowd money</b>SA $10,881 (137 trades) &middot; UTAH $23,807 (138 trades) <span class="src">Polymarket; sells count for the other side</span></div>
-  <div class="prof m-match"><b>SA</b><span class="chip elite">Offense #6</span><span class="chip elite">Defense #8</span></div><div class="prof m-match"><b>UTAH</b><span class="chip elite">Offense #10</span><span class="chip weak">Defense #30</span></div>
-  
-  <div class="prof m-injury"><b>SA OUT</b>Jayden Quaintance</div>
-  <div class="prof m-age"><b>Avg age</b>SA 26.0 &middot; UTAH 25.4 &middot; gap 0.6 yrs (SA older)</div>
-  
-  
+  <section class="grp" style="--k:var(--c-match)"><h3>Matchup</h3><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip elite">#6</span><small>elite</small></div><div class="lab">Offense</div><div class="v h"><span class="chip elite">#10</span><small>elite</small></div></div><div class="row" style="--k:var(--c-match)"><div class="v a"><span class="chip elite">#8</span><small>elite</small></div><div class="lab">Defense</div><div class="v h"><span class="chip weak">#30</span><small>bottom 10</small></div></div></section>
+  <section class="grp" style="--k:var(--c-age)"><h3>Roster</h3><div class="row" style="--k:var(--c-age)"><div class="v a">26.0</div><div class="lab">Average age</div><div class="v h">25.4</div></div></section>
+  <section class="grp" style="--k:var(--c-injury)"><h3>Injuries</h3><div class="row" style="--k:var(--c-injury)"><div class="v a">Out: Jayden Quaintance<br>Day-to-day: Malik Williams<br>Day-to-day: Carter Bryant<br>Day-to-day: Stephon Castle<br>Day-to-day: Devin Vassell</div><div class="lab">Report</div><div class="v h">None reported</div></div></section>
+  <section class="grp" style="--k:var(--c-line)"><h3>Market</h3><div class="bar" style="--k:var(--c-line)"><span style="width:36.5%"></span></div><div class="row" style="--k:var(--c-line)"><div class="v a">36%</div><div class="lab">Crowd win %</div><div class="v h">64%</div></div><div class="row" style="--k:var(--c-line)"><div class="v a">$10,900<small>142 trades</small></div><div class="lab">Crowd money</div><div class="v h">$23,815<small>140 trades</small></div></div></section>
+  <p class="note" style="--k:var(--c-line)"><b>Line</b> UTAH -4.5 · O/U 226.5</p><p class="src">Crowd data: Polymarket &middot; updated 12:54 PM PT</p>
 </article>
 <div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge &amp; rivalry</span>
-<span><i style="--k:var(--c-match)"></i>Matchups (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
+<span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-age)"></i>Age</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
-<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN. Crowd % is the Polymarket price, a rough signal when trading is thin.</p>
-</main></body></html>
+<p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin.</p>
+</main><script>
+(function(){
+document.documentElement.classList.add('js');
+var pages=[].slice.call(document.querySelectorAll('.page')),i=0,
+back=document.getElementById('back'),fwd=document.getElementById('fwd'),cnt=document.getElementById('count');
+if(!pages.length)return;
+function show(n,dir){
+  i=Math.max(0,Math.min(pages.length-1,n));
+  pages.forEach(function(p,k){p.classList.toggle('on',k===i)});
+  pages[i].style.setProperty('--dx',(dir<0?'-12px':'12px'));
+  back.disabled=i===0;fwd.disabled=i===pages.length-1;
+  cnt.textContent=(i+1)+' of '+pages.length;
+  try{history.replaceState(null,'','#g'+(i+1))}catch(e){}
+  window.scrollTo(0,0);
+}
+back.onclick=function(){show(i-1,-1)};fwd.onclick=function(){show(i+1,1)};
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowLeft')show(i-1,-1);else if(e.key==='ArrowRight')show(i+1,1)});
+var x0=null;
+document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
+document.addEventListener('touchend',function(e){
+  if(x0===null)return;var dx=e.changedTouches[0].clientX-x0;x0=null;
+  if(Math.abs(dx)>70)show(i+(dx<0?1:-1),dx<0?1:-1)},{passive:true});
+var m=/^#g(\d+)$/.exec(location.hash);show(m?parseInt(m[1],10)-1:0,1);
+})();
+</script></body></html>
