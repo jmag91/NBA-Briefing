@@ -556,56 +556,66 @@ def crowd_flow(cid, sides):
     return flow
 
 
-def crowd_block(ev, away, home):
-    """Returns (tags, html). Empty if no market found for this game."""
+def crowd_data(ev, away, home):
+    """Polymarket crowd view for one game, or None when no market exists.
+    -> {pa, ph, thin, money: ((dollars, trades), (dollars, trades)) or None}"""
     tip = parse_dt(ev["date"])
     gm = f'{away["team"]["abbreviation"]} at {home["team"]["abbreviation"]}'
-    def key(t):
-        return norm(t["team"].get("name") or t["team"]["displayName"].split()[-1])
+    key = lambda t: norm(t["team"].get("name") or t["team"]["displayName"].split()[-1])
     ka, kh = key(away), key(home)
+    pick = lambda d, k: next((v for n, v in d.items() if n == k or n.endswith(k) or k.endswith(n)), None)
     for c in load_crowd():
         if abs((c["start"] - tip).total_seconds()) > 12 * 3600:
             continue
-        pa = next((v for k, v in c["p"].items() if k == ka or k.endswith(ka) or ka.endswith(k)), None)
-        ph = next((v for k, v in c["p"].items() if k == kh or k.endswith(kh) or kh.endswith(k)), None)
+        pa, ph = pick(c["p"], ka), pick(c["p"], kh)
         if pa is None or ph is None:
             continue
-        aa, ha = away["team"]["abbreviation"], home["team"]["abbreviation"]
-        thin = " (thin market)" if c["liq"] < 1000 else ""
         flow = crowd_flow(c.get("cid"), list(c["p"]))
-        fa = next((v for k, v in flow.items() if k == ka or k.endswith(ka) or ka.endswith(k)), None)
-        fh = next((v for k, v in flow.items() if k == kh or k.endswith(kh) or kh.endswith(k)), None)
-        money = ""
-        if fa and fh:
-            money = (f'<div class="prof m-crowd"><b>Crowd money</b>{escape(aa)} ${fa[0]:,.0f} ({fa[1]} trades) &middot; '
-                     f'{escape(ha)} ${fh[0]:,.0f} ({fh[1]} trades) <span class="src">Polymarket; sells count for the other side</span></div>')
-        html = (f'<div class="prof m-crowd"><b>Crowd</b>{escape(aa)} {pa*100:.0f}% &middot; {escape(ha)} {ph*100:.0f}% '
-                f'<span class="src">Polymarket{thin}, updated {datetime.now(PT).strftime("%-I:%M %p PT")}</span></div>')
+        fa, fh = pick(flow, ka), pick(flow, kh)
         print(f"Crowd: {gm} -> {pa*100:.0f}/{ph*100:.0f} (liquidity ${c['liq']:,.0f})")
-        return [], html + money
+        return {"pa": pa, "ph": ph, "thin": c["liq"] < 1000, "money": (fa, fh) if fa and fh else None}
     print(f"Crowd: no market for {gm}")
-    return [], ""
+    return None
 
 
-def team_line(info, form):
+GLOWS = ["#ff9f43", "#4dd0e1", "#ff6fb5", "#b6e35a", "#a78bfa"]
+
+
+def rest_text(info):
     if info is None:
-        return "Rest data unavailable"
+        return "No data"
     bits = []
     if info["b2b"]:
-        bits.append("2nd night of a back-to-back")
+        bits.append("Back-to-back")
     if info["third_in_four"]:
         bits.append("3rd game in 4 nights")
     if info.get("recent_road_in_6", 0) >= 3:
         bits.append(f"{info['recent_road_in_6']} road games in last 5 nights")
+    d = info["days_off"]
     if not bits:
-        d = info["days_off"]
-        bits.append("First game of the season" if d is None else f"{d} day{'s' if d != 1 else ''} rest")
-    if form and form["n_games"] >= 3:
-        bits.append(f"L10 {form['last10']} ({form['streak']})")
-    return " · ".join(bits)
+        bits.append("Season opener" if d is None else f"{d} day{'s' if d != 1 else ''} rest")
+    return "<br>".join(bits)
 
 
-def card(ev, today, season, revenge, rivalries, ratings):
+def rank_chip(rank, n):
+    cls = "elite" if rank <= GOOD else "weak" if rank > n - BAD else ""
+    note = "elite" if cls == "elite" else "bottom 10" if cls == "weak" else ""
+    return f'<span class="chip {cls}">#{rank}</span>' + (f"<small>{note}</small>" if note else "")
+
+
+def row(label, a, h, k):
+    return (f'<div class="row" style="--k:var(--c-{k})"><div class="v a">{a}</div>'
+            f'<div class="lab">{escape(label)}</div><div class="v h">{h}</div></div>')
+
+
+def section(title, k, rows):
+    rows = "".join(r for r in rows if r)
+    if not rows:
+        return ""
+    return f'<section class="grp" style="--k:var(--c-{k})"><h3>{escape(title)}</h3>{rows}</section>'
+
+
+def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     comp = ev["competitions"][0]
     side = {c["homeAway"]: c for c in comp["competitors"]}
     away, home = side["away"], side["home"]
@@ -614,119 +624,203 @@ def card(ev, today, season, revenge, rivalries, ratings):
 
     ai = rest_and_travel(a_id, a_abbr, today, season)
     hi = rest_and_travel(h_id, h_abbr, today, season)
-    af = form_summary(ai)
-    hf = form_summary(hi)
+    af, hf = form_summary(ai), form_summary(hi)
 
+    # ---- flags (same rules as before) ----
     tags = []
-    itags, inj_html = injury_block(a_abbr, h_abbr)
-    tags += itags
-
-    if (ai["b2b"] and ai["third_in_four"]
-            and hi["days_off"] is not None and hi["days_off"] >= 1):
-        tags.append(("fatigue", "Road B2B + 3rd in 4 nights vs. rested opponent"))
+    if (ai["b2b"] and ai["third_in_four"] and hi["days_off"] is not None and hi["days_off"] >= 1):
+        tags.append(("fatigue", "Road back-to-back and 3rd game in 4 nights vs. a rested opponent"))
     elif ai["b2b"] and (hi["days_off"] or 0) >= 2:
-        tags.append(("fatigue", f"Road B2B vs. {h_abbr} with {hi['days_off']} days rest"))
+        tags.append(("fatigue", f"{a_abbr} on a back-to-back vs. {h_abbr} with {hi['days_off']} days rest"))
     road_in_window = ai.get("recent_road_in_6", 0) + 1
     if road_in_window >= 4:
-        tags.append(("fatigue", f"{a_abbr} {road_in_window}th road game in 6 nights"))
-
+        tags.append(("fatigue", f"{a_abbr}: 4th road game in 6 nights"))
     if h_abbr in ("DEN", "UTA") and a_abbr not in ("DEN", "UTA"):
         tags.append(("altitude", f"Altitude: {a_abbr} visits {h_abbr}"))
-
     tip_dt = parse_dt(ev["date"]).astimezone(PT)
     if a_abbr in WEST_COAST and h_abbr not in WEST_COAST and tip_dt.hour >= 16:
-        tags.append(("travel", f"West-to-east: {a_abbr} plays night game in East"))
-
+        tags.append(("travel", f"West-to-east: {a_abbr} plays a night game in the East"))
     for r in revenge:
         if {r["winner"], r["loser"]} == {a_abbr, h_abbr}:
             tags.append(("revenge", f"Playoff revenge: {r['winner']} beat {r['loser']} {r['result']} ({r['round']})"))
-
-    for side_abbr, form in ((a_abbr, af), (h_abbr, hf)):
+    for abbr, form in ((a_abbr, af), (h_abbr, hf)):
         if form and form["n_games"] >= 5:
-            if form["streak"].startswith("L") and int(form["streak"][1:]) >= 3:
-                tags.append(("form", f"{side_abbr} on a {form['streak']} streak"))
-            if form["streak"].startswith("W") and int(form["streak"][1:]) >= 5:
-                tags.append(("form", f"{side_abbr} on a {form['streak']} streak"))
-
-    for side_info, side_abbr, other_abbr in ((ai, a_abbr, h_abbr), (hi, h_abbr, a_abbr)):
-        prev = side_info.get("prev")
-        if prev and prev["win"] and prev["margin"] >= 15 and side_info.get("days_off") == 1:
-            tags.append(("schedule", f"Possible letdown: {side_abbr} coming off +{int(prev['margin'])} win"))
-
-    rtags, prof = mismatch_tags(away, home, ratings)
-    atags, ageline = age_block(away, home)
+            st = form["streak"]
+            if (st.startswith("L") and int(st[1:]) >= 3) or (st.startswith("W") and int(st[1:]) >= 5):
+                tags.append(("form", f"{abbr} on a {st} streak"))
+    for info, abbr in ((ai, a_abbr), (hi, h_abbr)):
+        prev = info.get("prev")
+        if prev and prev["win"] and prev["margin"] >= 15 and info.get("days_off") == 1:
+            tags.append(("schedule", f"Possible letdown: {abbr} is coming off a +{int(prev['margin'])} win"))
+    rtags, _ = mismatch_tags(away, home, ratings)
+    atags, _ = age_block(away, home)
     tags += rtags + atags
+    flags = "".join(f'<li class="{c}"><i></i>{escape(t)}</li>' for c, t in tags)
+    flags_html = f'<ul class="flags">{flags}</ul>' if flags else '<p class="calm">No flags for this game.</p>'
 
+    # ---- rows ----
+    rest_rows = [row("Rest", rest_text(ai), rest_text(hi), "rest")]
+    def f(form, k, none="-"):
+        return escape(str(form[k])) if form and form.get(k) else none
+    form_rows = [
+        row("Last 10", f(af, "last10"), f(hf, "last10"), "form"),
+        row("Streak", f(af, "streak"), f(hf, "streak"), "form"),
+        row("Home record", f(af, "home"), f(hf, "home"), "form"),
+        row("Road record", f(af, "road"), f(hf, "road"), "form"),
+        row("Close games", f(af, "close"), f(hf, "close"), "form") if (af and af.get("close")) or (hf and hf.get("close")) else "",
+    ] if (af or hf) else []
+
+    match_rows = []
+    if ratings:
+        n, ranks = ratings["n"], ratings["ranks"]
+        ra, rh = ranks.get(norm(away["team"]["displayName"])), ranks.get(norm(home["team"]["displayName"]))
+        if ra and rh:
+            match_rows = [row("Offense", rank_chip(ra[0], n), rank_chip(rh[0], n), "match"),
+                          row("Defense", rank_chip(ra[1], n), rank_chip(rh[1], n), "match")]
+
+    age_rows = []
+    ag, hg = _ages.get(a_id), _ages.get(h_id)
+    if ag and hg:
+        ma, mh = sum(ag) / len(ag), sum(hg) / len(hg)
+        age_rows = [row("Average age", f"{ma:.1f}", f"{mh:.1f}", "age")]
+
+    inj = load_injuries()
+    def inj_text(abbr):
+        pl = inj.get(abbr) or []
+        outs = [p["name"] for p in pl if p["status"].lower() in ("out", "injured reserve", "out for season")]
+        dtd = [p["name"] for p in pl if "day" in p["status"].lower()]
+        lines = [f"Out: {escape(x)}" for x in outs[:5]]
+        if len(outs) > 5:
+            lines.append(f"+{len(outs) - 5} more out")
+        lines += [f"Day-to-day: {escape(x)}" for x in dtd[:4]]
+        return "<br>".join(lines) or "None reported"
+    inj_rows = [row("Report", inj_text(a_abbr), inj_text(h_abbr), "injury")]
+
+    crowd = crowd_data(ev, away, home)
+    market_rows, bar = [], ""
+    if crowd:
+        pa, ph = crowd["pa"] * 100, crowd["ph"] * 100
+        market_rows.append(row("Crowd win %", f"{pa:.0f}%", f"{ph:.0f}%", "line"))
+        bar = (f'<div class="bar" style="--k:var(--c-line)"><span style="width:{pa:.1f}%"></span></div>')
+        if crowd["money"]:
+            (da, na), (dh, nh) = crowd["money"]
+            market_rows.append(row("Crowd money", f"${da:,.0f}<small>{na} trades</small>", f"${dh:,.0f}<small>{nh} trades</small>", "line"))
+    market = section("Market", "line", market_rows)
+    if market and bar:
+        market = market.replace("</h3>", "</h3>" + bar, 1)
     line = odds_line(comp)
-    odds_html = f'<div class="prof m-line"><b>Line</b>{escape(line)}</div>' if line else ""
-    _ct, crowd_html = crowd_block(ev, away, home)
-
-    def form_line(abbr, form):
-        if not form or form["n_games"] < 1:
-            return ""
-        bits = [f"L10 {form['last10']}", form["streak"], f"H {form['home']}", f"R {form['road']}"]
-        if form.get("close"):
-            bits.append(f"Close {form['close']}")
-        return f'<div class="prof m-form"><b>{escape(abbr)} form</b>{" · ".join(bits)}</div>'
-
-    form_html = form_line(a_abbr, af) + form_line(h_abbr, hf)
+    line_html = (f'<p class="note" style="--k:var(--c-line)"><b>Line</b> {escape(line)}</p>' if line else "")
 
     crew = fetch_officials(ev["id"])
-    officials_html = ""
-    if crew:
-        officials_html = f'<div class="prof m-ref"><b>Officials</b>{escape(", ".join(crew))}</div>'
+    crew_html = f'<p class="note" style="--k:var(--c-ref)"><b>Officials</b> {escape(", ".join(crew))}</p>' if crew else ""
+    notes = rivalry_notes(away["team"], home["team"], rivalries)
+    src = ('<p class="src">Crowd data: Polymarket' + (" (thin market, treat as rough)" if crowd and crowd["thin"] else "") +
+           f' &middot; updated {datetime.now(PT).strftime("%-I:%M %p PT")}</p>') if crowd else ""
 
     tip = tip_dt.strftime("%-I:%M %p PT")
-    tag_html = "".join(f'<span class="tag {c}">{escape(t)}</span>' for c, t in tags)
-    name = lambda c: escape(c["team"]["displayName"])
-    notes = rivalry_notes(away["team"], home["team"], rivalries)
-
-    return f"""<article class="card">
-  <div class="top"><span class="tip">{tip}</span>{tag_html}</div>
-  <h2>{name(away)} <small>at</small> {name(home)}</h2>
-  <dl><dt>{escape(a_abbr)}</dt><dd>{team_line(ai, af)}</dd><dt>{escape(h_abbr)}</dt><dd>{team_line(hi, hf)}</dd></dl>
-  {odds_html}
-  {crowd_html}
-  {prof}
-  {form_html}
-  {inj_html}
-  {ageline}
-  {officials_html}
-  {notes}
+    glow = GLOWS[idx % len(GLOWS)]
+    return f"""<article class="page" data-i="{idx}" style="--glow:{glow}">
+  <header class="match">
+    <span class="tip">{tip}</span>
+    <div class="teams"><h2 class="t a">{escape(away["team"]["displayName"])}</h2><span class="at">at</span><h2 class="t h">{escape(home["team"]["displayName"])}</h2></div>
+  </header>
+  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3>{flags_html}</section>
+  {section("Rest and schedule", "rest", rest_rows)}
+  {section("Form", "form", form_rows)}
+  {section("Matchup", "match", match_rows)}
+  {section("Roster", "age", age_rows)}
+  {section("Injuries", "injury", inj_rows)}
+  {market}
+  {line_html}{crew_html}{src}{notes}
 </article>"""
 
 
 CSS = """
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
---tip:#f0eee6;--tipfg:#262624;
 --c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
 --c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font:16px/1.5 "Barlow",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
-main{max-width:720px;margin:0 auto}h1{font:700 2rem "Barlow Condensed",sans-serif;margin:8px 0 2px}
-.sub{color:var(--mute);margin:0 0 20px}
-.card{background:var(--card);border:1px solid var(--glow);border-top:4px solid var(--glow);
-box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 22%,transparent),0 0 26px -4px color-mix(in srgb,var(--glow) 55%,transparent);
-border-radius:12px;padding:14px 16px;margin-bottom:18px}
-.card:nth-of-type(5n+1){--glow:#ff9f43}.card:nth-of-type(5n+2){--glow:#4dd0e1}.card:nth-of-type(5n+3){--glow:#ff6fb5}
-.card:nth-of-type(5n+4){--glow:#b6e35a}.card:nth-of-type(5n+5){--glow:#a78bfa}
-.top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.tip{background:var(--tip);color:var(--tipfg);font-weight:600;font-size:.85rem;padding:2px 9px;border-radius:99px}
-.tag{font-size:.85rem;font-weight:600;padding:2px 9px;border-radius:99px;border:1.5px solid currentColor}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Barlow",system-ui,sans-serif;
+padding:0 16px 48px}
+main{max-width:680px;margin:0 auto}
+.bar-top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);
+padding:max(12px,env(safe-area-inset-top)) 0 12px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+h1{font:700 1.7rem/1.1 "Barlow Condensed",sans-serif;margin:0}
+.sub{color:var(--mute);margin:2px 0 10px;font-size:.95rem}
+.pager{display:none;align-items:center;gap:10px}.js .pager{display:flex}
+.pager button{font:600 1rem "Barlow",sans-serif;color:var(--ink);background:var(--card);border:1.5px solid var(--line);
+border-radius:99px;padding:7px 18px;cursor:pointer;min-width:96px}
+.pager button:hover:not(:disabled){border-color:var(--ink)}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.count{flex:1;text-align:center;color:var(--mute);font-weight:600}
+.page{background:var(--card);border:1px solid color-mix(in srgb,var(--glow) 70%,transparent);border-top:4px solid var(--glow);
+border-radius:16px;padding:22px 20px 20px;
+box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6px color-mix(in srgb,var(--glow) 55%,transparent)}
+.js .page{display:none}.js .page.on{display:block}
+.page+.page{margin-top:22px}.js .page+.page{margin-top:0}
+.tip{display:inline-block;background:var(--ink);color:var(--bg);font-weight:600;font-size:.85rem;padding:2px 11px;border-radius:99px}
+.teams{display:grid;grid-template-columns:1fr minmax(5.5rem,auto) 1fr;gap:12px;align-items:baseline;margin:12px 0 4px}
+.t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0}.t.a{text-align:right}.t.h{text-align:left}
+.at{color:var(--mute);font-size:.95rem;text-align:center}
+.grp{margin-top:22px}
+.grp h3{font:600 1.05rem "Barlow",sans-serif;color:var(--k);margin:0 0 6px;padding-left:10px;border-left:3px solid var(--k)}
+.row{display:grid;grid-template-columns:1fr minmax(5.5rem,auto) 1fr;gap:12px;align-items:baseline;padding:7px 0;
+border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.row:last-child{border-bottom:0}
+.lab{color:var(--k);font-size:.88rem;text-align:center;font-weight:600}
+.v{font-size:1.02rem}.v.a{text-align:right}.v.h{text-align:left}
+.v small{display:block;color:var(--mute);font-size:.8rem}
+.chip{display:inline-block;padding:1px 10px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute);font-size:.92rem}
+.chip.elite{color:var(--c-match);background:color-mix(in srgb,var(--c-match) 16%,transparent);border-color:currentColor;font-weight:600}
+.chip.weak{color:var(--c-match);border:1.5px dashed currentColor;font-weight:600;opacity:.8}
+.flags{list-style:none;margin:0;padding:0}
+.flags li{display:flex;gap:10px;align-items:baseline;padding:5px 0;font-weight:600}
+.flags li i{flex:none;width:9px;height:9px;border-radius:50%;background:currentColor;transform:translateY(-1px)}
 .fatigue,.schedule{color:var(--c-rest)}.altitude,.travel{color:var(--c-travel)}.injury{color:var(--c-injury)}
 .revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
-.m-match{--k:var(--c-match)}.m-injury{--k:var(--c-injury)}.m-age{--k:var(--c-age)}.m-line,.m-crowd{--k:var(--c-line)}
-.m-form{--k:var(--c-form)}.m-ref{--k:var(--c-ref)}
-.prof{border-left:3px solid var(--k,var(--line));padding-left:9px}.prof b{color:var(--k,var(--ink))}
-.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:20px;font-size:.85rem;color:var(--mute)}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
-.src{color:var(--mute);font-size:.8rem;margin-left:6px}.prof{margin-top:6px;font-size:.9rem}.prof b{margin-right:8px}.chip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:99px;border:1.5px solid var(--line);color:var(--mute)}.chip.elite{color:var(--c-match);background:color-mix(in srgb,var(--c-match) 16%,transparent);border-color:currentColor;font-weight:600}.chip.weak{color:var(--c-match);border:1.5px dashed currentColor;font-weight:600;opacity:.8}
-h2{font:600 1.5rem "Barlow Condensed",sans-serif;margin:8px 0}h2 small{color:var(--mute);font-weight:400}
-dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{font-weight:600}dd{margin:0;color:var(--mute)}
-.empty,.foot{color:var(--mute)}.foot{font-size:.9rem;margin-top:24px}
-details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:600}
+.calm{margin:0;color:var(--mute)}
+.bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--k) 22%,var(--bg));margin:4px 0 6px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--k);border-radius:99px 0 0 99px}
+.note{margin:16px 0 0;padding-left:10px;border-left:3px solid var(--k)}.note b{color:var(--k);margin-right:8px}
+.src{color:var(--mute);font-size:.82rem;margin:10px 0 0}
+details{margin-top:18px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;color:var(--c-rivalry)}
 details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
-summary{color:var(--c-rivalry)}details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
+details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
+.empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
+@media (max-width:480px){.t{font-size:1.45rem}.row{gap:8px}.page{padding:18px 14px}}
+@media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
+@keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
+"""
+
+JS = """
+(function(){
+document.documentElement.classList.add('js');
+var pages=[].slice.call(document.querySelectorAll('.page')),i=0,
+back=document.getElementById('back'),fwd=document.getElementById('fwd'),cnt=document.getElementById('count');
+if(!pages.length)return;
+function show(n,dir){
+  i=Math.max(0,Math.min(pages.length-1,n));
+  pages.forEach(function(p,k){p.classList.toggle('on',k===i)});
+  pages[i].style.setProperty('--dx',(dir<0?'-12px':'12px'));
+  back.disabled=i===0;fwd.disabled=i===pages.length-1;
+  cnt.textContent=(i+1)+' of '+pages.length;
+  try{history.replaceState(null,'','#g'+(i+1))}catch(e){}
+  window.scrollTo(0,0);
+}
+back.onclick=function(){show(i-1,-1)};fwd.onclick=function(){show(i+1,1)};
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowLeft')show(i-1,-1);else if(e.key==='ArrowRight')show(i+1,1)});
+var x0=null;
+document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
+document.addEventListener('touchend',function(e){
+  if(x0===null)return;var dx=e.changedTouches[0].clientX-x0;x0=null;
+  if(Math.abs(dx)>70)show(i+(dx<0?1:-1),dx<0?1:-1)},{passive:true});
+var m=/^#g(\\d+)$/.exec(location.hash);show(m?parseInt(m[1],10)-1:0,1);
+})();
 """
 
 
@@ -745,26 +839,30 @@ def main():
     load_injuries()
     load_crowd()
     ratings = load_ratings(today)
-    cards = "".join(card(e, today, season, revenge, rivalries, ratings) for e in events) or '<p class="empty">No NBA games today.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials are best-effort from ESPN. Crowd % is the Polymarket price, a rough signal when trading is thin."
+    cards = "".join(card(e, today, season, revenge, rivalries, ratings, i, len(events))
+                    for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
+    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
+    n = len(events)
+    pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
+             '<span class="count" id="count"></span><button id="fwd" type="button">Forward &rsaquo;</button></div>') if n else ""
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>JMAG'S NBA Daily Digest</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>{CSS}</style></head><body><main>
-<h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {len(events)} game{'s' if len(events) != 1 else ''}</p>
+<div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
 {cards}
 <div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge &amp; rivalry</span>
-<span><i style="--k:var(--c-match)"></i>Matchups (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
+<span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-age)"></i>Age</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">{foot}</p>
-</main></body></html>"""
+</main><script>{JS}</script></body></html>"""
     os.makedirs("docs", exist_ok=True)
     with open("docs/index.html", "w", encoding="utf-8") as f:
         f.write(page)
-    print(f"Wrote docs/index.html with {len(events)} games")
+    print(f"Wrote docs/index.html with {n} games")
 
 
 if __name__ == "__main__":
