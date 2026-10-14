@@ -638,6 +638,14 @@ def head_to_head(a_id, b_id, season, today):
 _fc = None
 
 
+NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def name_key(name):
+    """Normalized name without Jr./II style suffixes, for matching ESPN to the forecast file."""
+    return " ".join(w for w in norm(name).split() if w not in NAME_SUFFIXES)
+
+
 def slim_forecast(d):
     """Pull just the fields we show out of the big forecast file."""
     meta = d.get("meta", {})
@@ -654,7 +662,13 @@ def slim_forecast(d):
         pls = sorted(players.get(ab, []), key=lambda p: -(p.get("minutes") or 0))
         rank = lambda k: (comp.get(k) or {}).get("league_rank")
         coach = chg.get(ab)
+        rot = [{"name": p["name"], "key": name_key(p["name"]), "pos": p.get("position"), "age": p.get("age"),
+                "mpg": p.get("projected_mpg") or 0, "minutes": p.get("minutes") or 0,
+                "impact": p.get("team_impact_contribution") or 0, "rookie": bool(p.get("is_rookie")),
+                "pick": p.get("draft_pick")} for p in pls[:12]]
         teams[norm(t["name"])] = {
+            "sd": (t.get("uncertainty_display") or {}).get("sd"), "team_minutes": t.get("minutes") or 1,
+            "players": rot,
             "abbr": ab, "name": t["name"],
             "wins": t.get("display_wins"), "losses": t.get("display_losses"),
             "win_low": t.get("win_low"), "win_high": t.get("win_high"),
@@ -670,6 +684,9 @@ def slim_forecast(d):
             "top": [{"name": p["name"], "age": p.get("age"), "mpg": p.get("projected_mpg")} for p in pls[:5]],
             "watch": [{"name": p["name"], "note": p.get("injury")} for p in pls if p.get("injury")][:3],
         }
+    sds = sorted((v["sd"] for v in teams.values() if v.get("sd")), reverse=True)
+    for v in teams.values():
+        v["sd_rank"] = sds.index(v["sd"]) + 1 if v.get("sd") in sds else None
     return {"as_of": meta.get("as_of"), "updated": meta.get("model_updated"),
             "home_adv": blend.get("home_advantage", 2.0), "sd": blend.get("game_residual_sd", 13.6), "teams": teams}
 
@@ -859,6 +876,42 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
                     f'{" (playoffs)" if last["playoff"] else ""}</p>')
     else:
         h2h_note = ""
+    inj_all = load_injuries()
+    def availability(f_, abbr):
+        """Match ESPN injuries to the team's projected rotation. -> dict or None"""
+        if not f_:
+            return None
+        listed = {}
+        for pl in inj_all.get(abbr) or []:
+            st = pl["status"].lower()
+            kind = "out" if st in ("out", "injured reserve", "out for season") else "dtd" if "day" in st else None
+            if kind:
+                listed[name_key(pl["name"])] = kind
+        out_min = sum(x["minutes"] for x in f_["players"] if listed.get(x["key"]) == "out")
+        dtd_min = sum(x["minutes"] for x in f_["players"] if listed.get(x["key"]) == "dtd")
+        hits = []
+        for rank, x in enumerate(f_["players"][:10], 1):
+            if x["key"] in listed:
+                hits.append((x, rank, listed[x["key"]]))
+        return {"out_pct": 100 * out_min / f_["team_minutes"], "dtd_pct": 100 * dtd_min / f_["team_minutes"], "hits": hits}
+    av_a, av_h = availability(fa, a_abbr), availability(fh, h_abbr)
+    for av, ab in ((av_a, a_abbr), (av_h, h_abbr)):
+        if not av:
+            continue
+        for x, rank, kind in av["hits"]:
+            if kind == "out" and rank <= 3:
+                tags.append(("injury", f"Key absence: {ab} is without {x['name']} (#{rank} in projected minutes)"))
+        if av["out_pct"] >= 15:
+            tags.append(("injury", f"{ab} is missing {av['out_pct']:.0f}% of its projected minutes"))
+    for f_, ab in ((fa, a_abbr), (fh, h_abbr)):
+        if f_ and f_.get("sd_rank") and f_["sd_rank"] <= 5:
+            tags.append(("outlook", f"Wide range of outcomes: {ab}'s season forecast is among the 5 most uncertain"))
+    if fa and fh and fa["players"] and fh["players"]:
+        best = lambda f_: max(f_["players"], key=lambda x: x["impact"])
+        ba, bh = best(fa), best(fh)
+        if abs(ba["impact"] - bh["impact"]) >= 1.5:
+            top_, ab_ = (ba, a_abbr) if ba["impact"] > bh["impact"] else (bh, h_abbr)
+            tags.append(("age", f"Star power: {ab_} has the best player on the floor, {top_['name']}"))
     flags = "".join(f'<li class="{c}"><i></i>{escape(t)}</li>' for c, t in tags)
     flags_html = f'<ul class="flags">{flags}</ul>' if flags else '<p class="calm">No flags for this game.</p>'
 
@@ -903,8 +956,14 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         age_rows.append(row("Head coach", coach(fa), coach(fh), "age") if (fa.get("coach") or fh.get("coach")) else "")
         if fa.get("returning_pct") is not None and fh.get("returning_pct") is not None:
             age_rows.append(row("Returning minutes", f"{fa['returning_pct']:.0f}%", f"{fh['returning_pct']:.0f}%", "age"))
-        top = lambda f_: "<br>".join(f"{escape(x['name'])} <small>{x['age']:.0f} yrs &middot; {x['mpg']:.0f} min</small>" for x in f_["top"][:3])
-        age_rows.append(row("Top players", top(fa), top(fh), "age"))
+        best3 = lambda f_: "<br>".join(
+            f"{escape(x['name'])}<small>{escape(x['pos'] or '')} &middot; {x['mpg']:.0f} min &middot; impact {x['impact']:+.1f}</small>"
+            for x in sorted(f_["players"], key=lambda x: -x["impact"])[:3])
+        age_rows.append(row("Best players", best3(fa), best3(fh), "age"))
+        rook = lambda f_: "<br>".join(
+            f"{escape(x['name'])}<small>{('pick ' + str(int(x['pick'])) + ' &middot; ') if x['pick'] else ''}{x['mpg']:.0f} min</small>"
+            for x in f_["players"] if x["rookie"] and x["mpg"] >= 12) or "None in rotation"
+        age_rows.append(row("Rookies in rotation", rook(fa), rook(fh), "age"))
 
     inj = load_injuries()
     def inj_text(abbr):
@@ -917,6 +976,14 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         lines += [f"Day-to-day: {escape(x)}" for x in dtd[:4]]
         return "<br>".join(lines) or "None reported"
     inj_rows = [row("Report", inj_text(a_abbr), inj_text(h_abbr), "injury")]
+    if av_a and av_h:
+        def hit(av):
+            lines = [f"{escape(x['name'])}<small>{'out' if kind == 'out' else 'day-to-day'} &middot; #{rank} in minutes &middot; {x['mpg']:.0f} min</small>"
+                     for x, rank, kind in av["hits"]]
+            return "<br>".join(lines) or "None of the top 10"
+        inj_rows.append(row("Rotation players listed", hit(av_a), hit(av_h), "injury"))
+        share = lambda av: f"{av['out_pct']:.0f}% out<small>{av['dtd_pct']:.0f}% day-to-day</small>"
+        inj_rows.append(row("Projected minutes affected", share(av_a), share(av_h), "injury"))
     if fa and fh and (fa["watch"] or fh["watch"]):
         w = lambda f_: "<br>".join(f"{escape(x['name'])}<small>{escape((x['note'] or '')[:70])}</small>" for x in f_["watch"]) or "-"
         inj_rows.append(row(f"Preseason notes ({load_forecast()['as_of']})", w(fa), w(fh), "injury"))
@@ -933,6 +1000,8 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             row("Make playoffs", pct(fa["playoffs"]), pct(fh["playoffs"]), "outlook"),
             row("Schedule difficulty", sched(fa), sched(fh), "outlook"),
         ]
+        spread = lambda f_: (f"&plusmn;{f_['sd']:.1f} wins" + ("<small>wide range</small>" if f_["sd_rank"] <= 5 else "<small>narrow range</small>" if f_["sd_rank"] >= 26 else "")) if f_.get("sd") else "-"
+        outlook_rows.append(row("Outlook spread", spread(fa), spread(fh), "outlook"))
         pw, edge = model_win_prob(fa, fh)
         fav, favp = (h_abbr, pw) if pw >= 0.5 else (a_abbr, 1 - pw)
         out_note = (f'<p class="note" style="--k:var(--c-outlook)"><b>Model view</b> {escape(fav)} wins {favp * 100:.0f}% of the time, '
@@ -1091,7 +1160,7 @@ def main():
     ratings = load_ratings(today)
     cards = "".join(card(e, today, season, revenge, rivalries, ratings, i, len(events))
                     for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Season outlook comes from your forecast file. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
+    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
