@@ -17,7 +17,7 @@ docs/index.html with:
 
 Designed to run free via GitHub Actions every morning.
 """
-import json, os, unicodedata, urllib.parse, urllib.request
+import json, math, os, unicodedata, zipfile, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
@@ -632,6 +632,96 @@ def head_to_head(a_id, b_id, season, today):
             "oldest": games[-1]["date"]}
 
 
+# ---------------------------------------------------------------------------
+# Season forecast (your forecast.json / forecast.zip in the data folder)
+# ---------------------------------------------------------------------------
+_fc = None
+
+
+def slim_forecast(d):
+    """Pull just the fields we show out of the big forecast file."""
+    meta = d.get("meta", {})
+    blend = d.get("blend", {})
+    chg = {c["team"]: c for c in (d.get("coaching_changes") or {}).get("teams", [])}
+    by_abbr = {}
+    players = {}
+    for pl in d.get("players", []):
+        players.setdefault(pl.get("team"), []).append(pl)
+    teams = {}
+    for t in d["teams"]:
+        ab = t["team"]
+        dev, comp, post, cont = t.get("development") or {}, (t.get("profile") or {}).get("components") or {}, t.get("postseason") or {}, t.get("continuity") or {}
+        pls = sorted(players.get(ab, []), key=lambda p: -(p.get("minutes") or 0))
+        rank = lambda k: (comp.get(k) or {}).get("league_rank")
+        coach = chg.get(ab)
+        teams[norm(t["name"])] = {
+            "abbr": ab, "name": t["name"],
+            "wins": t.get("display_wins"), "losses": t.get("display_losses"),
+            "win_low": t.get("win_low"), "win_high": t.get("win_high"),
+            "rank": t.get("rank"), "conf": t.get("conference"), "conf_rank": t.get("conference_rank"),
+            "strength": t.get("neutral_strength"), "pd": t.get("display_point_differential"),
+            "playoffs": post.get("playoffs_probability"), "no1": post.get("no1_seed_probability"),
+            "sched_rank": (t.get("schedule") or {}).get("difficulty_rank"),
+            "rotation_age": dev.get("weighted_age"),
+            "young_share": dev.get("young_minutes_share"), "age32_share": dev.get("age32_minutes_share"),
+            "returning_pct": cont.get("returning_minutes_pct"),
+            "spacing": rank("spacing"), "rebounding": rank("rebounding"), "rim": rank("rim_protection"),
+            "coach": (coach or {}).get("name"), "coach_first_time": (coach or {}).get("first_time_nba_head_coach"),
+            "top": [{"name": p["name"], "age": p.get("age"), "mpg": p.get("projected_mpg")} for p in pls[:5]],
+            "watch": [{"name": p["name"], "note": p.get("injury")} for p in pls if p.get("injury")][:3],
+        }
+    return {"as_of": meta.get("as_of"), "updated": meta.get("model_updated"),
+            "home_adv": blend.get("home_advantage", 2.0), "sd": blend.get("game_residual_sd", 13.6), "teams": teams}
+
+
+def load_forecast():
+    global _fc
+    if _fc is not None:
+        return _fc
+    _fc = {}
+    base = os.path.join(os.path.dirname(__file__) or ".", "data")
+    try:
+        raw = None
+        for name in ("forecast.zip", "forecast.json"):
+            path = os.path.join(base, name)
+            if not os.path.exists(path):
+                continue
+            if name.endswith(".zip"):
+                with zipfile.ZipFile(path) as z:
+                    raw = json.loads(z.read(next(n for n in z.namelist() if n.endswith(".json"))))
+            else:
+                with open(path, encoding="utf-8") as f:
+                    raw = json.load(f)
+            break
+        if raw:
+            _fc = slim_forecast(raw)
+            print(f"Forecast loaded: {len(_fc['teams'])} teams (as of {_fc['as_of']})")
+        else:
+            print("Forecast file not found in data/ (forecast.zip or forecast.json); skipping")
+    except Exception as e:
+        print(f"WARNING: forecast unavailable: {e}")
+    return _fc
+
+
+def fc_team(team):
+    f = load_forecast()
+    if not f:
+        return None
+    ts = f["teams"]
+    full = norm(team["displayName"])
+    if full in ts:
+        return ts[full]
+    nick = norm(team.get("name") or "")
+    return next((v for k, v in ts.items() if nick and k.endswith(nick)), None)
+
+
+def model_win_prob(fa, fh):
+    """P(home wins) = NormalCDF((home strength - away strength + home advantage) / game SD)."""
+    f = load_forecast()
+    edge = fh["strength"] - fa["strength"] + f["home_adv"]
+    return 0.5 * (1 + math.erf(edge / f["sd"] / math.sqrt(2))), edge
+
+
 GLOWS = ["#ff9f43", "#4dd0e1", "#ff6fb5", "#b6e35a", "#a78bfa"]
 
 
@@ -717,8 +807,35 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         if prev and prev["win"] and prev["margin"] >= 15 and info.get("days_off") == 1:
             tags.append(("schedule", f"Possible letdown: {abbr} is coming off a +{int(prev['margin'])} win"))
     rtags, _ = mismatch_tags(away, home, ratings)
-    atags, _ = age_block(away, home)
-    tags += rtags + atags
+    tags += rtags
+    fa, fh = fc_team(away["team"]), fc_team(home["team"])
+    ag, hg = _ages.get(a_id), _ages.get(h_id)
+    roster_a = sum(ag) / len(ag) if ag else None
+    roster_h = sum(hg) / len(hg) if hg else None
+    rot_a, rot_h = (fa or {}).get("rotation_age"), (fh or {}).get("rotation_age")
+    if rot_a and rot_h:
+        gap, basis = rot_a - rot_h, "rotation"
+    elif roster_a and roster_h:
+        gap, basis = roster_a - roster_h, "roster"
+    else:
+        gap, basis = 0, ""
+    if abs(gap) >= AGE_GAP_TAG:
+        older = a_abbr if gap > 0 else h_abbr
+        tags.append(("age", f"Age gap: {older} {basis} is older by {abs(gap):.1f} yrs"))
+    if fa and fh:
+        for f_, ab in ((fa, a_abbr), (fh, h_abbr)):
+            if f_.get("returning_pct") is not None and f_["returning_pct"] < 50:
+                tags.append(("age", f"Low continuity: {ab} returns only {f_['returning_pct']:.0f}% of last season's minutes"))
+            if f_.get("coach"):
+                tags.append(("age", f"New head coach: {ab} under {f_['coach']}" + (" (first NBA head job)" if f_.get("coach_first_time") else "")))
+        pw, edge = model_win_prob(fa, fh)
+        if abs(edge) >= 8:
+            tags.append(("outlook", f"Model sees a {abs(edge):.0f}-point gap: {h_abbr if edge > 0 else a_abbr} is much stronger"))
+        for (x, xa), (y, ya) in (((fa, a_abbr), (fh, h_abbr)), ((fh, h_abbr), (fa, a_abbr))):
+            if x.get("rebounding") and y.get("rebounding") and x["rebounding"] <= 8 and y["rebounding"] >= 23:
+                tags.append(("mismatch", f"Glass mismatch: {xa} rebounding #{x['rebounding']} vs. {ya} #{y['rebounding']}"))
+            if x.get("spacing") and y.get("rim") and x["spacing"] <= 8 and y["rim"] >= 23:
+                tags.append(("mismatch", f"Spacing vs. rim: {xa} spacing #{x['spacing']} vs. {ya} rim protection #{y['rim']}"))
     h2h = head_to_head(a_id, h_id, season, today)
     h2h_rows = []
     if h2h:
@@ -770,11 +887,24 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             match_rows = [row("Offense", rank_chip(ra[0], n), rank_chip(rh[0], n), "match"),
                           row("Defense", rank_chip(ra[1], n), rank_chip(rh[1], n), "match")]
 
+    if fa and fh:
+        for lab, key in (("Spacing", "spacing"), ("Rebounding", "rebounding"), ("Rim protection", "rim")):
+            if fa.get(key) and fh.get(key):
+                match_rows.append(row(lab, rank_chip(fa[key], 30), rank_chip(fh[key], 30), "match"))
+
     age_rows = []
-    ag, hg = _ages.get(a_id), _ages.get(h_id)
-    if ag and hg:
-        ma, mh = sum(ag) / len(ag), sum(hg) / len(hg)
-        age_rows = [row("Average age", f"{ma:.1f}", f"{mh:.1f}", "age")]
+    if rot_a and rot_h:
+        older_rot = "a" if rot_a - rot_h >= AGE_GAP_TAG else "h" if rot_h - rot_a >= AGE_GAP_TAG else ""
+        age_rows.append(row("Rotation age", f"{rot_a:.1f}", f"{rot_h:.1f}", "age", older_rot))
+    if roster_a and roster_h:
+        age_rows.append(row("Roster average age", f"{roster_a:.1f}", f"{roster_h:.1f}", "age"))
+    if fa and fh:
+        coach = lambda f_: (escape(f_["coach"]) + "<small>new this season</small>") if f_.get("coach") else "Returning"
+        age_rows.append(row("Head coach", coach(fa), coach(fh), "age") if (fa.get("coach") or fh.get("coach")) else "")
+        if fa.get("returning_pct") is not None and fh.get("returning_pct") is not None:
+            age_rows.append(row("Returning minutes", f"{fa['returning_pct']:.0f}%", f"{fh['returning_pct']:.0f}%", "age"))
+        top = lambda f_: "<br>".join(f"{escape(x['name'])} <small>{x['age']:.0f} yrs &middot; {x['mpg']:.0f} min</small>" for x in f_["top"][:3])
+        age_rows.append(row("Top players", top(fa), top(fh), "age"))
 
     inj = load_injuries()
     def inj_text(abbr):
@@ -787,6 +917,27 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         lines += [f"Day-to-day: {escape(x)}" for x in dtd[:4]]
         return "<br>".join(lines) or "None reported"
     inj_rows = [row("Report", inj_text(a_abbr), inj_text(h_abbr), "injury")]
+    if fa and fh and (fa["watch"] or fh["watch"]):
+        w = lambda f_: "<br>".join(f"{escape(x['name'])}<small>{escape((x['note'] or '')[:70])}</small>" for x in f_["watch"]) or "-"
+        inj_rows.append(row(f"Preseason notes ({load_forecast()['as_of']})", w(fa), w(fh), "injury"))
+
+
+    outlook_rows, out_note = [], ""
+    if fa and fh:
+        rec = lambda f_: f"{f_['wins']:.0f}-{f_['losses']:.0f}<small>{f_['win_low']}-{f_['win_high']} wins likely</small>"
+        pct = lambda v: f"{v * 100:.0f}%" if v >= 0.01 else "&lt;1%"
+        sched = lambda f_: f"#{f_['sched_rank']}" + ("<small>hardest</small>" if f_["sched_rank"] <= 5 else "<small>easiest</small>" if f_["sched_rank"] >= 26 else "")
+        outlook_rows = [
+            row("Projected record", rec(fa), rec(fh), "outlook"),
+            row("League rank", f"#{fa['rank']}<small>{fa['conf']} #{fa['conf_rank']}</small>", f"#{fh['rank']}<small>{fh['conf']} #{fh['conf_rank']}</small>", "outlook"),
+            row("Make playoffs", pct(fa["playoffs"]), pct(fh["playoffs"]), "outlook"),
+            row("Schedule difficulty", sched(fa), sched(fh), "outlook"),
+        ]
+        pw, edge = model_win_prob(fa, fh)
+        fav, favp = (h_abbr, pw) if pw >= 0.5 else (a_abbr, 1 - pw)
+        out_note = (f'<p class="note" style="--k:var(--c-outlook)"><b>Model view</b> {escape(fav)} wins {favp * 100:.0f}% of the time, '
+                    f'by about {abs(edge):.1f} points. This is my estimate from the forecast file team strengths plus home court, '
+                    f'not a number in the file.</p>')
 
     crowd = crowd_data(ev, away, home)
     market_rows, bar = [], ""
@@ -820,6 +971,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
   {section("Rest and schedule", "rest", rest_rows)}
   {section("Form", "form", form_rows)}
   {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
+  {section(f"Season outlook (forecast as of {load_forecast()['as_of']})" if fa and fh else "Season outlook", "outlook", outlook_rows)}{out_note}
   {section("Matchup", "match", match_rows)}
   {section("Roster", "age", age_rows)}
   {section("Injuries", "injury", inj_rows)}
@@ -831,7 +983,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
 CSS = """
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
 --c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
---c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
+--c-outlook:#6aa9ff;--c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Barlow",system-ui,sans-serif;
 padding:0 16px 48px}
@@ -875,7 +1027,7 @@ border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
 .flags li{display:flex;gap:10px;align-items:baseline;padding:5px 0;font-weight:600}
 .flags li i{flex:none;width:9px;height:9px;border-radius:50%;background:currentColor;transform:translateY(-1px)}
 .fatigue,.schedule{color:var(--c-rest)}.altitude,.travel{color:var(--c-travel)}.injury{color:var(--c-injury)}
-.revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
+.outlook{color:var(--c-outlook)}.revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
 .calm{margin:0;color:var(--mute)}
 .bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--k) 22%,var(--bg));margin:4px 0 6px;overflow:hidden}
 .bar span{display:block;height:100%;background:var(--k);border-radius:99px 0 0 99px}
@@ -935,10 +1087,11 @@ def main():
             team_history(c["team"]["id"], season)
     load_injuries()
     load_crowd()
+    load_forecast()
     ratings = load_ratings(today)
     cards = "".join(card(e, today, season, revenge, rivalries, ratings, i, len(events))
                     for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Average age is the mean of every player on the roster. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
+    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Season outlook comes from your forecast file. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
@@ -953,7 +1106,7 @@ def main():
 <div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge, rivalry &amp; head to head</span>
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
-<span><i style="--k:var(--c-age)"></i>Age</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
+<span><i style="--k:var(--c-outlook)"></i>Season outlook</span><span><i style="--k:var(--c-age)"></i>Age, roster &amp; coach</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">{foot}</p>
 </main><script>{JS}</script></body></html>"""
     os.makedirs("docs", exist_ok=True)
