@@ -578,6 +578,60 @@ def crowd_data(ev, away, home):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Head-to-head: last 10 meetings (regular season + playoffs, newest first)
+# ---------------------------------------------------------------------------
+_sg_cache = {}
+H2H_MAX, H2H_BACK = 10, 6
+H2H_DOMINANT = 0.8   # 8-2 or better counts as dominating
+
+
+def season_games(tid, season, stype):
+    key = (tid, season, stype)
+    if key in _sg_cache:
+        return _sg_cache[key]
+    out = []
+    try:
+        data = get(f"{API}/teams/{tid}/schedule?season={season}&seasontype={stype}")
+        for ev in data.get("events", []):
+            comp = ev["competitions"][0]
+            if not comp.get("status", {}).get("type", {}).get("completed"):
+                continue
+            me = next(c for c in comp["competitors"] if str(c["team"]["id"]) == str(tid))
+            opp = next(c for c in comp["competitors"] if str(c["team"]["id"]) != str(tid))
+            sc = lambda c: float((c.get("score") or {}).get("value", 0) if isinstance(c.get("score"), dict) else c.get("score") or 0)
+            out.append({"date": parse_dt(ev["date"]).astimezone(ET).date(), "opp_id": str(opp["team"]["id"]),
+                        "win": bool(me.get("winner")), "our": sc(me), "their": sc(opp), "playoff": stype == 3})
+    except Exception as e:
+        print(f"WARNING: h2h schedule {tid} {season}/{stype}: {e}")
+    _sg_cache[key] = out
+    return out
+
+
+def head_to_head(a_id, b_id, season, today):
+    """Last meetings between two teams from team a's point of view, or None."""
+    games = []
+    for s in range(season, season - H2H_BACK - 1, -1):
+        for st in (3, 2):
+            games += [g for g in season_games(a_id, s, st) if g["opp_id"] == str(b_id) and g["date"] < today]
+        if len(games) >= H2H_MAX:
+            break
+    games = sorted(games, key=lambda g: g["date"], reverse=True)[:H2H_MAX]
+    if not games:
+        return None
+    aw = sum(g["win"] for g in games)
+    streak_team_a, streak = games[0]["win"], 0
+    for g in games:
+        if g["win"] == streak_team_a:
+            streak += 1
+        else:
+            break
+    return {"n": len(games), "a": aw, "b": len(games) - aw,
+            "margin": sum(g["our"] - g["their"] for g in games) / len(games),
+            "last": games[0], "streak_a": streak_team_a, "streak": streak,
+            "oldest": games[-1]["date"]}
+
+
 GLOWS = ["#ff9f43", "#4dd0e1", "#ff6fb5", "#b6e35a", "#a78bfa"]
 
 
@@ -603,9 +657,19 @@ def rank_chip(rank, n):
     return f'<span class="chip {cls}">#{rank}</span>' + (f"<small>{note}</small>" if note else "")
 
 
-def row(label, a, h, k):
-    return (f'<div class="row" style="--k:var(--c-{k})"><div class="v a">{a}</div>'
-            f'<div class="lab">{escape(label)}</div><div class="v h">{h}</div></div>')
+def row(label, a, h, k, hi=""):
+    return (f'<div class="row" style="--k:var(--c-{k})"><div class="v a{" hi" if hi == "a" else ""}">{a}</div>'
+            f'<div class="lab">{escape(label)}</div><div class="v h{" hi" if hi == "h" else ""}">{h}</div></div>')
+
+
+def badge(team):
+    """Original monogram badge in the team's color (not the team's logo)."""
+    col = (team.get("color") or "666666").lstrip("#")
+    if len(col) != 6:
+        col = "666666"
+    r, g, b = (int(col[i:i + 2], 16) for i in (0, 2, 4))
+    fg = "#111" if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else "#fff"
+    return f'<span class="badge" style="--bc:#{col};--bf:{fg}" aria-hidden="true">{escape(team["abbreviation"])}</span>'
 
 
 def section(title, k, rows):
@@ -655,6 +719,29 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     rtags, _ = mismatch_tags(away, home, ratings)
     atags, _ = age_block(away, home)
     tags += rtags + atags
+    h2h = head_to_head(a_id, h_id, season, today)
+    h2h_rows = []
+    if h2h:
+        n, aw, hw = h2h["n"], h2h["a"], h2h["b"]
+        lead = a_abbr if aw > hw else h_abbr if hw > aw else None
+        top = max(aw, hw) / n
+        dom = ("a" if aw > hw else "h") if top >= 0.7 else ""
+        if top >= H2H_DOMINANT and n >= 6:
+            tags.append(("revenge", f"{lead} dominates this series: {max(aw, hw)}-{min(aw, hw)} in the last {n} meetings"))
+        m = h2h["margin"]
+        last = h2h["last"]
+        winner = a_abbr if last["win"] else h_abbr
+        sw = a_abbr if h2h["streak_a"] else h_abbr
+        h2h_rows = [
+            row("Record", f"{aw}-{hw}", f"{hw}-{aw}", "rivalry", dom),
+            row("Avg margin", f"{m:+.1f}", f"{-m:+.1f}", "rivalry"),
+            row("Streak", f"W{h2h['streak']}" if h2h["streak_a"] else "-", f"W{h2h['streak']}" if not h2h["streak_a"] else "-", "rivalry") if h2h["streak"] >= 2 else "",
+        ]
+        h2h_note = (f'<p class="note" style="--k:var(--c-rivalry)"><b>Last meeting</b> {last["date"]:%b %-d, %Y}: {escape(winner)} won '
+                    f'{int(max(last["our"], last["their"]))}-{int(min(last["our"], last["their"]))}'
+                    f'{" (playoffs)" if last["playoff"] else ""}</p>')
+    else:
+        h2h_note = ""
     flags = "".join(f'<li class="{c}"><i></i>{escape(t)}</li>' for c, t in tags)
     flags_html = f'<ul class="flags">{flags}</ul>' if flags else '<p class="calm">No flags for this game.</p>'
 
@@ -662,8 +749,13 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     rest_rows = [row("Rest", rest_text(ai), rest_text(hi), "rest")]
     def f(form, k, none="-"):
         return escape(str(form[k])) if form and form.get(k) else none
+    def l10(form):
+        if not form:
+            return "-"
+        n = min(form["n_games"], 10)
+        return escape(form["last10"]) + (f"<small>{n} games played</small>" if n < 10 else "")
     form_rows = [
-        row("Last 10", f(af, "last10"), f(hf, "last10"), "form"),
+        row("Last 10 games", l10(af), l10(hf), "form"),
         row("Streak", f(af, "streak"), f(hf, "streak"), "form"),
         row("Home record", f(af, "home"), f(hf, "home"), "form"),
         row("Road record", f(af, "road"), f(hf, "road"), "form"),
@@ -722,11 +814,12 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     return f"""<article class="page" data-i="{idx}" style="--glow:{glow}">
   <header class="match">
     <span class="tip">{tip}</span>
-    <div class="teams"><h2 class="t a">{escape(away["team"]["displayName"])}</h2><span class="at">at</span><h2 class="t h">{escape(home["team"]["displayName"])}</h2></div>
+    <div class="teams"><h2 class="t a"><span>{escape(away["team"]["displayName"])}</span>{badge(away["team"])}</h2><span class="at">at</span><h2 class="t h">{badge(home["team"])}<span>{escape(home["team"]["displayName"])}</span></h2></div>
   </header>
   <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3>{flags_html}</section>
   {section("Rest and schedule", "rest", rest_rows)}
   {section("Form", "form", form_rows)}
+  {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
   {section("Matchup", "match", match_rows)}
   {section("Roster", "age", age_rows)}
   {section("Injuries", "injury", inj_rows)}
@@ -760,8 +853,12 @@ box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6p
 .js .page{display:none}.js .page.on{display:block}
 .page+.page{margin-top:22px}.js .page+.page{margin-top:0}
 .tip{display:inline-block;background:var(--ink);color:var(--bg);font-weight:600;font-size:.85rem;padding:2px 11px;border-radius:99px}
-.teams{display:grid;grid-template-columns:1fr minmax(5.5rem,auto) 1fr;gap:12px;align-items:baseline;margin:12px 0 4px}
-.t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0}.t.a{text-align:right}.t.h{text-align:left}
+.teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(5.5rem,auto) minmax(0,1fr);gap:12px;align-items:baseline;margin:12px 0 4px}
+.t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0;display:flex;align-items:center;gap:10px}
+.t.a{justify-content:flex-end;text-align:right}.t.h{justify-content:flex-start;text-align:left}
+.badge{flex:none;width:2.6rem;height:2.6rem;border-radius:50%;background:var(--bc);color:var(--bf);display:grid;place-items:center;
+font:700 .9rem/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;box-shadow:0 0 0 2px color-mix(in srgb,var(--ink) 35%,transparent)}
+.v.hi{font-weight:700;color:var(--k)}.v.hi::after{content:"";display:block;height:2px;border-radius:2px;background:var(--k);margin-top:2px;width:100%}
 .at{color:var(--mute);font-size:.95rem;text-align:center}
 .grp{margin-top:22px}
 .grp h3{font:600 1.05rem "Barlow",sans-serif;color:var(--k);margin:0 0 6px;padding-left:10px;border-left:3px solid var(--k)}
@@ -791,7 +888,7 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
-@media (max-width:480px){.t{font-size:1.45rem}.row{gap:8px}.page{padding:18px 14px}}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 1.6rem minmax(0,1fr);gap:6px}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{width:2rem;height:2rem;font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 """
@@ -854,7 +951,7 @@ def main():
 <div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
 {cards}
 <div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
-<span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge &amp; rivalry</span>
+<span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge, rivalry &amp; head to head</span>
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-age)"></i>Age</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">{foot}</p>
