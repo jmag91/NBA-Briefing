@@ -1109,6 +1109,24 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
+#gate{display:none}
+html.gated,html.gated body{background:#000;overflow:hidden;height:100%}
+html.gated #app{display:none}
+html.gated #gate{display:flex;position:fixed;inset:0;z-index:50;background:#000;flex-direction:column;align-items:center;
+justify-content:center;gap:clamp(40px,8vh,72px);padding:24px;text-align:center}
+.gate-title{margin:0;font:800 clamp(2.1rem,7.2vw,5.4rem)/1.04 "Oxanium","Orbitron",system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;
+background:linear-gradient(180deg,#fff 0%,#d3d7dc 46%,#6f757c 52%,#cfd3d8 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.gate-title span{display:block}
+#enter{font:700 1.1rem/1 "Oxanium",system-ui,sans-serif;letter-spacing:.38em;text-indent:.38em;text-transform:uppercase;color:#f4ff1a;background:#000;
+border:2px solid #f4ff1a;border-radius:0;padding:18px 58px;cursor:pointer;
+text-shadow:0 0 10px rgba(244,255,26,.7);
+box-shadow:0 0 10px rgba(244,255,26,.6),0 0 34px rgba(244,255,26,.28),inset 0 0 16px rgba(244,255,26,.16);
+transition:background .18s,color .18s,text-shadow .18s}
+#enter:hover{background:#f4ff1a;color:#000;text-shadow:none}
+#enter:focus-visible{outline:2px solid #fff;outline-offset:5px}
+@media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
+@keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
+50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
 @media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 1.6rem minmax(0,1fr);gap:6px}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{width:2rem;height:2rem;font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
@@ -1117,6 +1135,11 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 JS = """
 (function(){
 document.documentElement.classList.add('js');
+var root=document.documentElement,enter=document.getElementById('enter');
+if(!/^#g\\d+$/.test(location.hash)){root.classList.add('gated');}
+function go(){root.classList.remove('gated');window.scrollTo(0,0)}
+if(enter)enter.onclick=go;
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&root.classList.contains('gated'))go()});
 var pages=[].slice.call(document.querySelectorAll('.page')),i=0,
 back=document.getElementById('back'),fwd=document.getElementById('fwd'),cnt=document.getElementById('count');
 if(!pages.length)return;
@@ -1168,8 +1191,10 @@ def main():
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>JMAG'S NBA Daily Digest</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap">
-<style>{CSS}</style></head><body><main>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&family=Oxanium:wght@700;800&display=swap">
+<style>{CSS}</style></head><body>
+<div id="gate"><h1 class="gate-title"><span>JMAG'S NBA</span><span>DAILY DIGEST</span></h1><button id="enter" type="button">Enter</button></div>
+<main id="app">
 <div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
 {cards}
 <div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
