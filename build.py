@@ -18,7 +18,7 @@ docs/index.html with:
 Designed to run free via GitHub Actions every morning.
 """
 import json, math, os, unicodedata, zipfile, urllib.parse, urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 
@@ -739,6 +739,141 @@ def model_win_prob(fa, fh):
     return 0.5 * (1 + math.erf(edge / f["sd"] / math.sqrt(2))), edge
 
 
+# ---------------------------------------------------------------------------
+# Points per possession, from real box scores (regular season only)
+# Possessions = FGA + 0.44*FTA - OREB + TOV, averaged over both teams in the game.
+# Finished games are cached in data/possessions.json so each run only fetches new ones.
+# ---------------------------------------------------------------------------
+SEASON_STARTS = {2027: (2026, 10, 20)}
+PPP_MIN_GAMES = 5
+MAX_NEW_GAMES = 80
+_ppp = None
+
+
+def _stat(stats, names, part=None):
+    for st in stats or []:
+        n, lab = (st.get("name") or "").lower(), (st.get("label") or "").lower()
+        if n in names or lab in names:
+            v = str(st.get("displayValue") if st.get("displayValue") not in (None, "") else st.get("value", ""))
+            if part is not None:
+                if "-" not in v:
+                    continue
+                v = v.split("-")[part]
+            try:
+                return float(v)
+            except ValueError:
+                continue
+    return None
+
+
+def _parse_box(summary, scores, periods):
+    """-> {team_id: {abbr, pts, fga, fta, oreb, tov}} or None if the box score is missing or odd."""
+    out = {}
+    for t in (summary.get("boxscore") or {}).get("teams") or []:
+        tid = str(t["team"]["id"])
+        st = t.get("statistics") or []
+        row = {"abbr": t["team"].get("abbreviation"), "pts": scores.get(tid),
+               "fga": _stat(st, {"fieldgoalsmade-fieldgoalsattempted", "fg"}, 1),
+               "fta": _stat(st, {"freethrowsmade-freethrowsattempted", "ft"}, 1),
+               "oreb": _stat(st, {"offensiverebounds", "oreb"}),
+               "tov": _stat(st, {"turnovers", "totalturnovers", "to"})}
+        if any(v is None for v in row.values()):
+            return None
+        out[tid] = row
+    return out if len(out) == 2 else None
+
+
+def load_ppp(today, season):
+    """Update the cache with newly finished regular-season games and return per-team efficiency."""
+    global _ppp
+    if _ppp is not None:
+        return _ppp
+    _ppp = {}
+    path = os.path.join(os.path.dirname(__file__) or ".", "data", "possessions.json")
+    cache = {"games": {}, "dates_done": []}
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                cache = json.load(f)
+    except Exception as e:
+        print(f"WARNING: could not read possessions cache: {e}")
+    start = SEASON_STARTS.get(season)
+    if not start:
+        print("PPP: no season start date on file; skipping")
+        return _ppp
+    d, new, bad = date(*start), 0, 0
+    try:
+        while d <= today:
+            ds = d.strftime("%Y%m%d")
+            if ds in cache["dates_done"] and d < today - timedelta(days=1):
+                d += timedelta(days=1)
+                continue
+            sb = get(f"{API}/scoreboard?dates={ds}")
+            all_final = True
+            for ev in sb.get("events", []):
+                comp = ev["competitions"][0]
+                if not comp.get("status", {}).get("type", {}).get("completed"):
+                    all_final = False
+                    continue
+                if (ev.get("season") or {}).get("type") != 2 or ev["id"] in cache["games"]:
+                    continue
+                if new >= MAX_NEW_GAMES:
+                    all_final = False
+                    continue
+                scores = {str(c["team"]["id"]): float((c.get("score") or {}).get("value", 0) if isinstance(c.get("score"), dict) else c.get("score") or 0)
+                          for c in comp["competitors"]}
+                try:
+                    box = _parse_box(get(f"{API}/summary?event={ev['id']}"), scores, comp["status"].get("period", 4))
+                except Exception as e:
+                    box = None
+                    print(f"WARNING: box score {ev['id']}: {e}")
+                new += 1
+                if not box:
+                    bad += 1
+                    all_final = False
+                    continue
+                cache["games"][ev["id"]] = {"date": ds, "periods": comp["status"].get("period", 4), "teams": box}
+            if all_final and ds not in cache["dates_done"]:
+                cache["dates_done"].append(ds)
+            d += timedelta(days=1)
+    except Exception as e:
+        print(f"WARNING: PPP update stopped early: {e}")
+    if new:
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(cache, f, separators=(",", ":"))
+        except Exception as e:
+            print(f"WARNING: could not save possessions cache: {e}")
+    tot = {}
+    for g in cache["games"].values():
+        (ida, a), (idb, b) = list(g["teams"].items())
+        mins = 48 + 5 * max(0, g.get("periods", 4) - 4)
+        poss = lambda x: x["fga"] + 0.44 * x["fta"] - x["oreb"] + x["tov"]
+        pg = (poss(a) + poss(b)) / 2
+        if pg <= 0:
+            continue
+        for tid, mine, theirs in ((ida, a, b), (idb, b, a)):
+            t = tot.setdefault(tid, {"abbr": mine["abbr"], "g": 0, "pts": 0.0, "opp": 0.0, "poss": 0.0, "pace": 0.0, "recent": []})
+            t["g"] += 1; t["pts"] += mine["pts"]; t["opp"] += theirs["pts"]; t["poss"] += pg; t["pace"] += pg * 48 / mins
+            t["recent"].append((g["date"], mine["pts"], theirs["pts"], pg))
+    res = {}
+    for tid, t in tot.items():
+        rec = sorted(t["recent"])[-5:]
+        rp = sum(x[3] for x in rec)
+        res[tid] = {"abbr": t["abbr"], "g": t["g"], "off": t["pts"] / t["poss"], "def": t["opp"] / t["poss"],
+                    "pace": t["pace"] / t["g"], "off5": sum(x[1] for x in rec) / rp, "def5": sum(x[2] for x in rec) / rp}
+        res[tid]["net"] = res[tid]["off"] - res[tid]["def"]
+    ranked = [k for k, v in res.items() if v["g"] >= 1]
+    for key, rev, name in (("off", True, "off_rank"), ("def", False, "def_rank"), ("net", True, "net_rank"), ("pace", True, "pace_rank")):
+        order = sorted(ranked, key=lambda k: res[k][key], reverse=rev)
+        for i, k in enumerate(order, 1):
+            res[k][name] = i
+    _ppp = {"teams": res, "n": len(ranked)}
+    print(f"PPP: {len(cache['games'])} games cached ({new} new, {bad} unreadable); {len(ranked)} teams")
+    return _ppp
+
+
 GLOWS = ["#ff9f43", "#4dd0e1", "#ff6fb5", "#b6e35a", "#a78bfa"]
 
 
@@ -824,6 +959,17 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         if prev and prev["win"] and prev["margin"] >= 15 and info.get("days_off") == 1:
             tags.append(("schedule", f"Possible letdown: {abbr} is coming off a +{int(prev['margin'])} win"))
     rtags, _ = mismatch_tags(away, home, ratings)
+    pp = load_ppp(today, season)
+    pa_, ph_ = pp["teams"].get(str(a_id)), pp["teams"].get(str(h_id))
+    use_ppp = bool(pa_ and ph_ and pa_["g"] >= PPP_MIN_GAMES and ph_["g"] >= PPP_MIN_GAMES)
+    if use_ppp:
+        n_t = pp["n"]
+        rtags = []
+        for (x, xa), (y, ya) in (((pa_, a_abbr), (ph_, h_abbr)), ((ph_, h_abbr), (pa_, a_abbr))):
+            if x["off_rank"] <= GOOD and y["def_rank"] > n_t - BAD:
+                rtags.append(("mismatch", f"{xa} elite offense (#{x['off_rank']}, {x['off']:.2f} pts/poss) vs. {ya} bottom-{BAD} defense (#{y['def_rank']}, {y['def']:.2f} allowed)"))
+            if x["def_rank"] <= GOOD and y["off_rank"] > n_t - BAD:
+                rtags.append(("lockdown", f"{xa} elite defense (#{x['def_rank']}, {x['def']:.2f} allowed) vs. {ya} bottom-{BAD} offense (#{y['off_rank']}, {y['off']:.2f} pts/poss)"))
     tags += rtags
     fa, fh = fc_team(away["team"]), fc_team(home["team"])
     ag, hg = _ages.get(a_id), _ages.get(h_id)
@@ -940,6 +1086,17 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             match_rows = [row("Offense", rank_chip(ra[0], n), rank_chip(rh[0], n), "match"),
                           row("Defense", rank_chip(ra[1], n), rank_chip(rh[1], n), "match")]
 
+    if pa_ and ph_:
+        n_t = pp["n"]
+        cell = lambda v, rk, g: f"{v:.3f}" + (f"<small>#{rk} of {n_t} &middot; {g} games</small>")
+        small = " (small sample)" if not use_ppp else ""
+        match_rows += [
+            row("Offense, pts per possession" + small, cell(pa_["off"], pa_["off_rank"], pa_["g"]), cell(ph_["off"], ph_["off_rank"], ph_["g"]), "match"),
+            row("Defense, pts allowed per possession", cell(pa_["def"], pa_["def_rank"], pa_["g"]), cell(ph_["def"], ph_["def_rank"], ph_["g"]), "match"),
+            row("Net per possession", f"{pa_['net']:+.3f}<small>#{pa_['net_rank']}</small>", f"{ph_['net']:+.3f}<small>#{ph_['net_rank']}</small>", "match"),
+            row("Last 5 games (off / def)", f"{pa_['off5']:.2f} / {pa_['def5']:.2f}", f"{ph_['off5']:.2f} / {ph_['def5']:.2f}", "match"),
+            row("Pace, possessions per 48", f"{pa_['pace']:.1f}<small>#{pa_['pace_rank']}</small>", f"{ph_['pace']:.1f}<small>#{ph_['pace_rank']}</small>", "match"),
+        ]
     if fa and fh:
         for lab, key in (("Spacing", "spacing"), ("Rebounding", "rebounding"), ("Rim protection", "rim")):
             if fa.get(key) and fh.get(key):
@@ -1180,10 +1337,11 @@ def main():
     load_injuries()
     load_crowd()
     load_forecast()
+    load_ppp(today, season)
     ratings = load_ratings(today)
     cards = "".join(card(e, today, season, revenge, rivalries, ratings, i, len(events))
                     for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
+    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
