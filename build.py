@@ -766,6 +766,84 @@ def _stat(stats, names, part=None):
     return None
 
 
+def _secs(v):
+    """'11:34' -> 694.0, '45.2' -> 45.2"""
+    v = str(v or "").strip()
+    if not v:
+        return None
+    try:
+        if ":" in v:
+            m, sec = v.split(":")
+            return int(m) * 60 + float(sec)
+        return float(v)
+    except ValueError:
+        return None
+
+
+EARLY_SEC, LATE_SEC, OREB_RESET = 7, 18, 10   # early = first 7s used; late = more than 18s used (last ~6s)
+
+
+def _clock_stats(plays, team_ids):
+    """Estimate how many seconds of the 24-second clock each team uses before shooting.
+
+    From play-by-play game-clock times: possession starts when a team gets the ball (defensive rebound,
+    turnover/steal, opponent's made shot or last free throw); an offensive rebound counts as already
+    10 seconds into a fresh clock (it resets to 14). Elapsed = start - shot time, kept only if 0..24.
+    -> {team_id: [total_seconds, shots, early_shots, late_shots]} or None when plays are unusable."""
+    if not plays or len(team_ids) != 2:
+        return None
+    a, b = team_ids
+    other = {a: b, b: a}
+    out = {a: [0.0, 0, 0, 0], b: [0.0, 0, 0, 0]}
+    poss, start, offset, period = None, None, 0.0, None
+    try:
+        for p in plays:
+            per = (p.get("period") or {}).get("number")
+            clock = _secs((p.get("clock") or {}).get("displayValue"))
+            if per is None or clock is None:
+                continue
+            if per != period:
+                period, poss, start, offset = per, None, None, 0.0
+            tid = str((p.get("team") or {}).get("id") or "")
+            typ = ((p.get("type") or {}).get("text") or "").lower()
+            if tid not in other:
+                tid = ""
+            shooting = bool(p.get("shootingPlay"))
+            scoring = bool(p.get("scoringPlay"))
+            text = (p.get("text") or "").lower()
+            if "free throw" in typ or "free throw" in text:
+                if tid and scoring and any(k in text for k in ("1 of 1", "2 of 2", "3 of 3")):
+                    poss, start, offset = other[tid], clock, 0.0
+                continue
+            if shooting and tid:
+                if poss == tid and start is not None:
+                    used = start - clock + offset
+                    if 0 <= used <= 24.5:
+                        o = out[tid]
+                        o[0] += used; o[1] += 1
+                        o[2] += used <= EARLY_SEC
+                        o[3] += used > LATE_SEC
+                if scoring:
+                    poss, start, offset = other[tid], clock, 0.0
+                else:
+                    poss = None
+            elif "rebound" in typ and tid:
+                if "offensive" in typ:
+                    poss, start, offset = tid, clock, OREB_RESET
+                else:
+                    poss, start, offset = tid, clock, 0.0
+            elif tid and ("turnover" in typ or "steal" in typ or "bad pass" in typ or "lost ball" in typ
+                          or "traveling" in typ or "offensive foul" in typ):
+                if "steal" in typ:
+                    poss, start, offset = tid, clock, 0.0
+                else:
+                    poss, start, offset = other[tid], clock, 0.0
+    except Exception as e:
+        print(f"WARNING: clock parse: {e}")
+        return None
+    return out if (out[a][1] + out[b][1]) >= 20 else None
+
+
 def _parse_box(summary, scores, periods):
     """-> {team_id: {abbr, pts, fga, fta, oreb, tov}} or None if the box score is missing or odd."""
     out = {}
@@ -777,10 +855,15 @@ def _parse_box(summary, scores, periods):
                "fta": _stat(st, {"freethrowsmade-freethrowsattempted", "ft"}, 1),
                "oreb": _stat(st, {"offensiverebounds", "oreb"}),
                "tov": _stat(st, {"turnovers", "totalturnovers", "to"})}
-        if any(v is None for v in row.values()):
+        if any(v is None for k, v in row.items() if k != "clk"):
             return None
         out[tid] = row
-    return out if len(out) == 2 else None
+    if len(out) != 2:
+        return None
+    cs = _clock_stats(summary.get("plays"), list(out))
+    for tid in out:
+        out[tid]["clk"] = cs[tid] if cs else None
+    return out
 
 
 def load_ppp(today, season):
@@ -815,7 +898,7 @@ def load_ppp(today, season):
                 if not comp.get("status", {}).get("type", {}).get("completed"):
                     all_final = False
                     continue
-                if (ev.get("season") or {}).get("type") != 2 or ev["id"] in cache["games"]:
+                if (ev.get("season") or {}).get("type") != 2 or (cache["games"].get(ev["id"]) or {}).get("v") == 2:
                     continue
                 if new >= MAX_NEW_GAMES:
                     all_final = False
@@ -832,7 +915,7 @@ def load_ppp(today, season):
                     bad += 1
                     all_final = False
                     continue
-                cache["games"][ev["id"]] = {"date": ds, "periods": comp["status"].get("period", 4), "teams": box}
+                cache["games"][ev["id"]] = {"v": 2, "date": ds, "periods": comp["status"].get("period", 4), "teams": box}
             if all_final and ds not in cache["dates_done"]:
                 cache["dates_done"].append(ds)
             d += timedelta(days=1)
@@ -854,17 +937,34 @@ def load_ppp(today, season):
         if pg <= 0:
             continue
         for tid, mine, theirs in ((ida, a, b), (idb, b, a)):
-            t = tot.setdefault(tid, {"abbr": mine["abbr"], "g": 0, "pts": 0.0, "opp": 0.0, "poss": 0.0, "pace": 0.0, "recent": []})
+            t = tot.setdefault(tid, {"abbr": mine["abbr"], "g": 0, "pts": 0.0, "opp": 0.0, "poss": 0.0, "pace": 0.0, "recent": [], "clk": [0.0, 0, 0, 0], "clk_opp": [0.0, 0, 0, 0]})
             t["g"] += 1; t["pts"] += mine["pts"]; t["opp"] += theirs["pts"]; t["poss"] += pg; t["pace"] += pg * 48 / mins
-            t["recent"].append((g["date"], mine["pts"], theirs["pts"], pg))
+            t["recent"].append((g["date"], mine["pts"], theirs["pts"], pg, pg * 48 / mins))
+            if mine.get("clk") and theirs.get("clk"):
+                for i_ in range(4):
+                    t["clk"][i_] += mine["clk"][i_]
+                    t["clk_opp"][i_] += theirs["clk"][i_]
     res = {}
     for tid, t in tot.items():
         rec = sorted(t["recent"])[-5:]
         rp = sum(x[3] for x in rec)
         res[tid] = {"abbr": t["abbr"], "g": t["g"], "off": t["pts"] / t["poss"], "def": t["opp"] / t["poss"],
-                    "pace": t["pace"] / t["g"], "off5": sum(x[1] for x in rec) / rp, "def5": sum(x[2] for x in rec) / rp}
+                    "pace": t["pace"] / t["g"], "off5": sum(x[1] for x in rec) / rp, "def5": sum(x[2] for x in rec) / rp,
+                    "pace5": sum(x[4] for x in rec) / len(rec)}
         res[tid]["net"] = res[tid]["off"] - res[tid]["def"]
+        c, co = t["clk"], t["clk_opp"]
+        if c[1] >= 150 and co[1] >= 150 and 8 <= c[0] / c[1] <= 20 and 8 <= co[0] / co[1] <= 20:
+            res[tid].update({"sc": c[0] / c[1], "sc_opp": co[0] / co[1], "sc_n": c[1],
+                             "early": 100 * c[2] / c[1], "late": 100 * c[3] / c[1]})
     ranked = [k for k, v in res.items() if v["g"] >= 1]
+    sc_teams = [k for k in ranked if "sc" in res[k]]
+    for i, k in enumerate(sorted(sc_teams, key=lambda k: res[k]["sc"]), 1):
+        res[k]["sc_rank"] = i
+    if sc_teams:
+        print(f"Shot clock estimate: {len(sc_teams)} teams measured, league average "
+              f"{sum(res[k]['sc'] for k in sc_teams) / len(sc_teams):.1f} s used before shooting")
+    else:
+        print("Shot clock estimate: not enough usable play-by-play yet (needs 150+ shots per team, 8-20 s average)")
     for key, rev, name in (("off", True, "off_rank"), ("def", False, "def_rank"), ("net", True, "net_rank"), ("pace", True, "pace_rank")):
         order = sorted(ranked, key=lambda k: res[k][key], reverse=rev)
         for i, k in enumerate(order, 1):
@@ -970,6 +1070,18 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
                 rtags.append(("mismatch", f"{xa} elite offense (#{x['off_rank']}, {x['off']:.2f} pts/poss) vs. {ya} bottom-{BAD} defense (#{y['def_rank']}, {y['def']:.2f} allowed)"))
             if x["def_rank"] <= GOOD and y["off_rank"] > n_t - BAD:
                 rtags.append(("lockdown", f"{xa} elite defense (#{x['def_rank']}, {x['def']:.2f} allowed) vs. {ya} bottom-{BAD} offense (#{y['off_rank']}, {y['off']:.2f} pts/poss)"))
+    if pa_ and ph_ and pa_["g"] >= PPP_MIN_GAMES and ph_["g"] >= PPP_MIN_GAMES:
+        n_t = pp["n"]
+        cut = max(1, round(n_t * 8 / 30))
+        ra, rh = pa_["pace_rank"], ph_["pace_rank"]
+        exp_poss = (pa_["pace"] + ph_["pace"]) / 2
+        if ra <= cut and rh <= cut:
+            rtags.append(("outlook", f"Track meet: {a_abbr} (#{ra}) and {h_abbr} (#{rh}) are both top-{cut} in pace, about {exp_poss:.0f} possessions expected"))
+        elif ra > n_t - cut and rh > n_t - cut:
+            rtags.append(("outlook", f"Slow grind: {a_abbr} (#{ra}) and {h_abbr} (#{rh}) are both bottom-{cut} in pace, about {exp_poss:.0f} possessions expected"))
+        elif (ra <= cut and rh > n_t - cut) or (rh <= cut and ra > n_t - cut):
+            fast, slow = (a_abbr, h_abbr) if ra < rh else (h_abbr, a_abbr)
+            rtags.append(("outlook", f"Pace clash: {fast} wants to run, {slow} wants to slow it down"))
     tags += rtags
     fa, fh = fc_team(away["team"]), fc_team(home["team"])
     ag, hg = _ages.get(a_id), _ages.get(h_id)
@@ -1095,7 +1207,13 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             row("Defense, pts allowed per possession", cell(pa_["def"], pa_["def_rank"], pa_["g"]), cell(ph_["def"], ph_["def_rank"], ph_["g"]), "match"),
             row("Net per possession", f"{pa_['net']:+.3f}<small>#{pa_['net_rank']}</small>", f"{ph_['net']:+.3f}<small>#{ph_['net_rank']}</small>", "match"),
             row("Last 5 games (off / def)", f"{pa_['off5']:.2f} / {pa_['def5']:.2f}", f"{ph_['off5']:.2f} / {ph_['def5']:.2f}", "match"),
-            row("Pace, possessions per 48", f"{pa_['pace']:.1f}<small>#{pa_['pace_rank']}</small>", f"{ph_['pace']:.1f}<small>#{ph_['pace_rank']}</small>", "match"),
+            row("Pace, possessions per 48", f"{pa_['pace']:.1f}<small>#{pa_['pace_rank']} of {n_t}</small>", f"{ph_['pace']:.1f}<small>#{ph_['pace_rank']} of {n_t}</small>", "match"),
+            *([row("Seconds used before shooting", f"{pa_['sc']:.1f} s<small>#{pa_['sc_rank']} fastest &middot; estimate</small>", f"{ph_['sc']:.1f} s<small>#{ph_['sc_rank']} fastest &middot; estimate</small>", "match"),
+               row("Opponents' seconds used vs. them", f"{pa_['sc_opp']:.1f} s", f"{ph_['sc_opp']:.1f} s", "match"),
+               row("Shots in first 7 seconds", f"{pa_['early']:.0f}%", f"{ph_['early']:.0f}%", "match"),
+               row("Shots after 18 seconds", f"{pa_['late']:.0f}%", f"{ph_['late']:.0f}%", "match")]
+              if "sc" in pa_ and "sc" in ph_ else []),
+            row("Pace, last 5 games", f"{pa_['pace5']:.1f}<small>{pa_['pace5'] - pa_['pace']:+.1f} vs. season</small>", f"{ph_['pace5']:.1f}<small>{ph_['pace5'] - ph_['pace']:+.1f} vs. season</small>", "match"),
         ]
     if fa and fh:
         for lab, key in (("Spacing", "spacing"), ("Rebounding", "rebounding"), ("Rim protection", "rim")):
@@ -1341,7 +1459,7 @@ def main():
     ratings = load_ratings(today)
     cards = "".join(card(e, today, season, revenge, rivalries, ratings, i, len(events))
                     for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
-    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
+    foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. The shot-clock rows are an estimate from play-by-play game-clock times, not official tracking data. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
