@@ -844,21 +844,35 @@ def _clock_stats(plays, team_ids):
     return out if (out[a][1] + out[b][1]) >= 20 else None
 
 
+_ppp_debug = []
+
+
+def _either(stats, separate, combined, part):
+    """ESPN sometimes lists made and attempted as separate stats and sometimes as one 'made-attempted' stat."""
+    v = _stat(stats, separate)
+    return v if v is not None else _stat(stats, combined, part)
+
+
 def _parse_box(summary, scores, periods):
-    """-> {team_id: {abbr, pts, fga, fta, oreb, tov}} or None if the box score is missing or odd."""
+    """-> {team_id: {abbr, pts, fga, fta, oreb, tov, clk}} or None if the box score is missing or odd."""
     out = {}
     for t in (summary.get("boxscore") or {}).get("teams") or []:
         tid = str(t["team"]["id"])
         st = t.get("statistics") or []
         row = {"abbr": t["team"].get("abbreviation"), "pts": scores.get(tid),
-               "fga": _stat(st, {"fieldgoalsmade-fieldgoalsattempted", "fg"}, 1),
-               "fta": _stat(st, {"freethrowsmade-freethrowsattempted", "ft"}, 1),
+               "fga": _either(st, {"fieldgoalsattempted", "fga"}, {"fieldgoalsmade-fieldgoalsattempted", "fg"}, 1),
+               "fta": _either(st, {"freethrowsattempted", "fta"}, {"freethrowsmade-freethrowsattempted", "ft"}, 1),
                "oreb": _stat(st, {"offensiverebounds", "oreb"}),
-               "tov": _stat(st, {"turnovers", "totalturnovers", "to"})}
-        if any(v is None for k, v in row.items() if k != "clk"):
+               "tov": _stat(st, {"totalturnovers", "turnovers", "to"})}
+        missing = [k for k, v in row.items() if v is None]
+        if missing:
+            if not _ppp_debug:
+                _ppp_debug.append(f"missing {missing}; stat names seen: {[x.get('name') for x in st][:40]}")
             return None
         out[tid] = row
     if len(out) != 2:
+        if not _ppp_debug:
+            _ppp_debug.append(f"expected 2 teams in boxscore, found {len(out)}; summary keys: {list(summary)[:15]}")
         return None
     cs = _clock_stats(summary.get("plays"), list(out))
     for tid in out:
@@ -893,12 +907,15 @@ def load_ppp(today, season):
                 continue
             sb = get(f"{API}/scoreboard?dates={ds}")
             all_final = True
+            seen_final = 0
             for ev in sb.get("events", []):
                 comp = ev["competitions"][0]
                 if not comp.get("status", {}).get("type", {}).get("completed"):
                     all_final = False
                     continue
-                if (ev.get("season") or {}).get("type") != 2 or (cache["games"].get(ev["id"]) or {}).get("v") == 2:
+                seen_final += 1
+                stype = (ev.get("season") or {}).get("type") or (sb.get("season") or {}).get("type")
+                if (stype is not None and stype != 2) or (cache["games"].get(ev["id"]) or {}).get("v") == 2:
                     continue
                 if new >= MAX_NEW_GAMES:
                     all_final = False
@@ -916,6 +933,7 @@ def load_ppp(today, season):
                     all_final = False
                     continue
                 cache["games"][ev["id"]] = {"v": 2, "date": ds, "periods": comp["status"].get("period", 4), "teams": box}
+            print(f"PPP: {ds}: {len(sb.get('events', []))} games on the scoreboard, {seen_final} finished")
             if all_final and ds not in cache["dates_done"]:
                 cache["dates_done"].append(ds)
             d += timedelta(days=1)
@@ -928,6 +946,8 @@ def load_ppp(today, season):
                 json.dump(cache, f, separators=(",", ":"))
         except Exception as e:
             print(f"WARNING: could not save possessions cache: {e}")
+    if _ppp_debug:
+        print("PPP debug: " + _ppp_debug[0])
     tot = {}
     for g in cache["games"].values():
         (ida, a), (idb, b) = list(g["teams"].items())
