@@ -845,6 +845,13 @@ def _clock_stats(plays, team_ids):
 
 
 _ppp_debug = []
+_ppp_notes = []
+
+
+def _pnote(msg):
+    print(msg)
+    if len(_ppp_notes) < 6:
+        _ppp_notes.append(msg)
 
 
 def _either(stats, separate, combined, part):
@@ -893,12 +900,14 @@ def load_ppp(today, season):
             with open(path, encoding="utf-8") as f:
                 cache = json.load(f)
     except Exception as e:
-        print(f"WARNING: could not read possessions cache: {e}")
+        _pnote(f"WARNING: could not read possessions cache: {e}")
     start = SEASON_STARTS.get(season)
     if not start:
-        print("PPP: no season start date on file; skipping")
+        _pnote("PPP: no season start date on file for this season")
+        _ppp = {"teams": {}, "n": 0, "games": 0, "bad": 0, "days": [], "notes": list(_ppp_notes)}
         return _ppp
     d, new, bad = date(*start), 0, 0
+    days_seen = []
     try:
         while d <= today:
             ds = d.strftime("%Y%m%d")
@@ -926,7 +935,7 @@ def load_ppp(today, season):
                     box = _parse_box(get(f"{API}/summary?event={ev['id']}"), scores, comp["status"].get("period", 4))
                 except Exception as e:
                     box = None
-                    print(f"WARNING: box score {ev['id']}: {e}")
+                    _pnote(f"WARNING: box score {ev['id']}: {e}")
                 new += 1
                 if not box:
                     bad += 1
@@ -934,11 +943,12 @@ def load_ppp(today, season):
                     continue
                 cache["games"][ev["id"]] = {"v": 2, "date": ds, "periods": comp["status"].get("period", 4), "teams": box}
             print(f"PPP: {ds}: {len(sb.get('events', []))} games on the scoreboard, {seen_final} finished")
+            days_seen.append(f"{ds[4:6]}/{ds[6:]}: {len(sb.get('events', []))} games, {seen_final} finished")
             if all_final and ds not in cache["dates_done"]:
                 cache["dates_done"].append(ds)
             d += timedelta(days=1)
     except Exception as e:
-        print(f"WARNING: PPP update stopped early: {e}")
+        _pnote(f"WARNING: PPP update stopped early: {e}")
     if new:
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -947,7 +957,7 @@ def load_ppp(today, season):
         except Exception as e:
             print(f"WARNING: could not save possessions cache: {e}")
     if _ppp_debug:
-        print("PPP debug: " + _ppp_debug[0])
+        _pnote("PPP debug: " + _ppp_debug[0])
     tot = {}
     for g in cache["games"].values():
         (ida, a), (idb, b) = list(g["teams"].items())
@@ -989,7 +999,7 @@ def load_ppp(today, season):
         order = sorted(ranked, key=lambda k: res[k][key], reverse=rev)
         for i, k in enumerate(order, 1):
             res[k][name] = i
-    _ppp = {"teams": res, "n": len(ranked)}
+    _ppp = {"teams": res, "n": len(ranked), "games": len(cache["games"]), "bad": bad, "days": days_seen[-3:], "notes": list(_ppp_notes)}
     print(f"PPP: {len(cache['games'])} games cached ({new} new, {bad} unreadable); {len(ranked)} teams")
     return _ppp
 
@@ -1218,6 +1228,12 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             match_rows = [row("Offense", rank_chip(ra[0], n), rank_chip(rh[0], n), "match"),
                           row("Defense", rank_chip(ra[1], n), rank_chip(rh[1], n), "match")]
 
+    ppp_note = ""
+    if not (pa_ and ph_):
+        why = "; ".join(pp.get("notes") or []) or "no finished games were read yet"
+        ppp_note = (f'<p class="note" style="--k:var(--c-match)"><b>Points per possession and pace</b> '
+                    f'not available yet. Games read: {pp.get("games", 0)} ({pp.get("bad", 0)} unreadable). '
+                    f'Scoreboard: {escape(" | ".join(pp.get("days") or ["no dates checked"]))}. {escape(why)}</p>')
     if pa_ and ph_:
         n_t = pp["n"]
         cell = lambda v, rk, g: f"{v:.3f}" + (f"<small>#{rk} of {n_t} &middot; {g} games</small>")
@@ -1336,7 +1352,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
   {section("Form", "form", form_rows)}
   {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
   {section(f"Season outlook (forecast as of {load_forecast()['as_of']})" if fa and fh else "Season outlook", "outlook", outlook_rows)}{out_note}
-  {section("Matchup", "match", match_rows)}
+  {section("Matchup", "match", match_rows)}{ppp_note}
   {section("Roster", "age", age_rows)}
   {section("Injuries", "injury", inj_rows)}
   {market}
