@@ -1034,6 +1034,9 @@ def row(label, a, h, k, hi=""):
             f'<div class="lab">{escape(label)}</div><div class="v h{" hi" if hi == "h" else ""}">{h}</div></div>')
 
 
+SHOW_LOGOS = True   # set to False to go back to the plain color badges
+
+
 def badge(team):
     """Original monogram badge in the team's color (not the team's logo)."""
     col = (team.get("color") or "666666").lstrip("#")
@@ -1041,7 +1044,30 @@ def badge(team):
         col = "666666"
     r, g, b = (int(col[i:i + 2], 16) for i in (0, 2, 4))
     fg = "#111" if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else "#fff"
-    return f'<span class="badge" style="--bc:#{col};--bf:{fg}" aria-hidden="true">{escape(team["abbreviation"])}</span>'
+    logo = (team.get("logo") or "").strip()
+    img = ""
+    if SHOW_LOGOS and logo.startswith("https://"):
+        img = (f'<img src="{escape(logo, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer" '
+               f'onload="this.parentNode.classList.add(\'ok\')" onerror="this.remove()">')
+    return (f'<span class="badge" style="--bc:#{col};--bf:{fg}" aria-hidden="true">{img}'
+            f'<span class="ab">{escape(team["abbreviation"])}</span></span>')
+
+
+def record_text(comp_team, info):
+    """Overall record from ESPN's scoreboard, else counted from finished games."""
+    recs = comp_team.get("records") or []
+    tot = next((r for r in recs if (r.get("type") == "total" or (r.get("name") or "").lower() == "overall") and r.get("summary")), None)
+    if tot:
+        return tot["summary"]
+    hist = (info or {}).get("hist") or []
+    w = sum(1 for g in hist if g["win"])
+    return f"{w}-{len(hist) - w}"
+
+
+def name_block(comp_team, info):
+    t = comp_team["team"]
+    rec = escape(record_text(comp_team, info))
+    return f'<span class="tn">{escape(t["displayName"])}<small class="rec">{rec}</small></span>'
 
 
 def section(title, k, rows):
@@ -1345,7 +1371,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     return f"""<article class="page" data-i="{idx}" style="--glow:{glow}">
   <header class="match">
     <span class="tip">{tip}</span>
-    <div class="teams"><h2 class="t a"><span>{escape(away["team"]["displayName"])}</span>{badge(away["team"])}</h2><span class="at">at</span><h2 class="t h">{badge(home["team"])}<span>{escape(home["team"]["displayName"])}</span></h2></div>
+    <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><span class="at">at</span><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
   </header>
   <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3>{flags_html}</section>
   {section("Rest and schedule", "rest", rest_rows)}
@@ -1388,8 +1414,11 @@ box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6p
 .teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(5.5rem,auto) minmax(0,1fr);gap:12px;align-items:baseline;margin:12px 0 4px}
 .t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0;display:flex;align-items:center;gap:10px}
 .t.a{justify-content:flex-end;text-align:right}.t.h{justify-content:flex-start;text-align:left}
-.badge{flex:none;width:2.6rem;height:2.6rem;border-radius:50%;background:var(--bc);color:var(--bf);display:grid;place-items:center;
+.tn{display:block;min-width:0}.rec{display:block;font:600 .95rem/1.2 "Barlow",system-ui,sans-serif;color:var(--mute);margin-top:3px}
+.badge{position:relative;flex:none;width:3.1rem;height:3.1rem;border-radius:50%;overflow:hidden;background:var(--bc);color:var(--bf);display:grid;place-items:center;
 font:700 .9rem/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;box-shadow:0 0 0 2px color-mix(in srgb,var(--ink) 35%,transparent)}
+.badge img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:2px}
+.badge.ok{background:transparent;box-shadow:none;overflow:visible}.badge.ok .ab{display:none}
 .v.hi{font-weight:700;color:var(--k)}.v.hi::after{content:"";display:block;height:2px;border-radius:2px;background:var(--k);margin-top:2px;width:100%}
 .at{color:var(--mute);font-size:.95rem;text-align:center}
 .grp{margin-top:22px}
@@ -1438,7 +1467,7 @@ transition:background .18s,color .18s,text-shadow .18s}
 @media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
 @keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
 50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
-@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 1.6rem minmax(0,1fr);gap:6px}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{width:2rem;height:2rem;font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 1.6rem minmax(0,1fr);gap:6px}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 """
