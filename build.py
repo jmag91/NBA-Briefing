@@ -17,7 +17,7 @@ docs/index.html with:
 
 Designed to run free via GitHub Actions every morning.
 """
-import json, math, os, unicodedata, zipfile, urllib.parse, urllib.request
+import json, math, os, sys, time, traceback, unicodedata, zipfile, urllib.error, urllib.parse, urllib.request
 from datetime import date, datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
@@ -36,10 +36,23 @@ def norm(s):
     return " ".join(s.split())
 
 
-def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
+def get(url, tries=3):
+    """GET json, retrying brief network hiccups (timeouts, 5xx) before giving up."""
+    last = None
+    for k in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code < 500 and e.code != 429:
+                raise
+        except Exception as e:
+            last = e
+        if k < tries - 1:
+            time.sleep(2 * (k + 1))
+    raise last
 
 
 def parse_dt(s):
@@ -1505,11 +1518,30 @@ var m=/^#g(\\d+)$/.exec(location.hash);show(m?parseInt(m[1],10)-1:0,1);
 """
 
 
+def fallback_card(ev, idx):
+    """Bare-bones page for a game whose full card could not be built, so one bad game never breaks the site."""
+    try:
+        comp = ev["competitions"][0]["competitors"]
+        away = next(c for c in comp if c["homeAway"] == "away")["team"]["displayName"]
+        home = next(c for c in comp if c["homeAway"] == "home")["team"]["displayName"]
+        tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
+    except Exception:
+        away, home, tip = "Away team", "Home team", ""
+    return (f'<article class="page" data-i="{idx}" style="--glow:{GLOWS[idx % len(GLOWS)]}"><header class="match">'
+            f'<span class="tip">{escape(tip)}</span><div class="teams"><h2 class="t a"><span class="tn">{escape(away)}</span></h2>'
+            f'<span class="at">at</span><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
+            f'<p class="calm">Details for this game could not be loaded this hour. They should return on the next update.</p></article>')
+
+
 def main():
     now = datetime.now(ET)
     today = now.date()
     season = today.year + 1 if today.month >= 8 else today.year
-    data = get(f"{API}/scoreboard?dates={today:%Y%m%d}")
+    try:
+        data = get(f"{API}/scoreboard?dates={today:%Y%m%d}")
+    except Exception as e:
+        print(f"WARNING: ESPN scoreboard unavailable after retries ({e}); keeping the previous page")
+        return
     events = sorted(data.get("events", []), key=lambda e: e["date"])
     revenge = load_revenge()
     rivalries = load_rivalries()
@@ -1517,15 +1549,28 @@ def main():
         for c in e["competitions"][0]["competitors"]:
             roster_names(c["team"]["id"])
             team_history(c["team"]["id"], season)
-    load_injuries()
-    load_crowd()
-    load_forecast()
-    load_ppp(today, season)
-    ratings = load_ratings(today)
-    cards = "".join(card(e, today, season, revenge, rivalries, ratings, i, len(events))
-                    for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
+    for loader, args in ((load_injuries, ()), (load_crowd, ()), (load_forecast, ()), (load_ppp, (today, season))):
+        try:
+            loader(*args)
+        except Exception:
+            print(f"WARNING: {loader.__name__} failed; continuing without it")
+            traceback.print_exc()
+    try:
+        ratings = load_ratings(today)
+    except Exception:
+        print("WARNING: load_ratings failed; continuing without ranks")
+        traceback.print_exc()
+        ratings = None
+    def safe_card(e, i):
+        try:
+            return card(e, today, season, revenge, rivalries, ratings, i, len(events))
+        except Exception:
+            print(f"WARNING: could not build the card for event {e.get('id')}")
+            traceback.print_exc()
+            return fallback_card(e, i)
+    cards = "".join(safe_card(e, i) for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
     foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. The shot-clock rows are an estimate from play-by-play game-clock times, not official tracking data. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
-    stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y")
+    stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y") + " &middot; updated " + now.astimezone(PT).strftime("%-I:%M %p PT")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
              '<span class="count" id="count"></span><button id="fwd" type="button">Forward &rsaquo;</button></div>') if n else ""
