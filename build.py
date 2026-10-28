@@ -1017,7 +1017,7 @@ def load_ppp(today, season):
     return _ppp
 
 
-GLOWS = ["#ff9f43", "#4dd0e1", "#ff6fb5", "#b6e35a", "#a78bfa"]
+GLOW = "#ffb86b"   # one glow color for every matchup page
 
 
 def rest_text(info):
@@ -1380,13 +1380,11 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
            f' &middot; updated {datetime.now(PT).strftime("%-I:%M %p PT")}</p>') if crowd else ""
 
     tip = tip_dt.strftime("%-I:%M %p PT")
-    glow = GLOWS[idx % len(GLOWS)]
-    return f"""<article class="page" data-i="{idx}" style="--glow:{glow}">
+    return f"""<article class="page" data-i="{idx}">
   <header class="match">
-    <span class="tip">{tip}</span>
-    <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><span class="at">at</span><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
+    <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span></div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
   </header>
-  <section class="grp flagsec" style="--k:var(--glow)"><h3>What stands out</h3>{flags_html}</section>
+  <section class="grp flagsec" style="--k:var(--c-flags)"><h3>What stands out</h3>{flags_html}</section>
   {section("Rest and schedule", "rest", rest_rows)}
   {section("Form", "form", form_rows)}
   {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
@@ -1400,7 +1398,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
 
 
 CSS = """
-:root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ff9f43;
+:root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ffb86b;--c-flags:#f0eee6;
 --c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
 --c-outlook:#6aa9ff;--c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
 *{box-sizing:border-box}
@@ -1424,7 +1422,8 @@ box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6p
 .js .page{display:none}.js .page.on{display:block}
 .page+.page{margin-top:22px}.js .page+.page{margin-top:0}
 .tip{display:inline-block;background:var(--ink);color:var(--bg);font-weight:600;font-size:.85rem;padding:2px 11px;border-radius:99px}
-.teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(5.5rem,auto) minmax(0,1fr);gap:12px;align-items:baseline;margin:12px 0 4px}
+.teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(5.5rem,auto) minmax(0,1fr);gap:12px;align-items:center;margin:4px 0 4px}
+.mid{display:flex;flex-direction:column;align-items:center;gap:6px}
 .t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0;display:flex;align-items:center;gap:10px}
 .t.a{justify-content:flex-end;text-align:right}.t.h{justify-content:flex-start;text-align:left}
 .tn{display:block;min-width:0}.rec{display:block;font:600 .95rem/1.2 "Barlow",system-ui,sans-serif;color:var(--mute);margin-top:3px}
@@ -1433,7 +1432,7 @@ font:700 .9rem/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;box-shadow:0
 .badge img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:2px}
 .badge.ok{background:transparent;box-shadow:none;overflow:visible}.badge.ok .ab{display:none}
 .v.hi{font-weight:700;color:var(--k)}.v.hi::after{content:"";display:block;height:2px;border-radius:2px;background:var(--k);margin-top:2px;width:100%}
-.at{color:var(--mute);font-size:.95rem;text-align:center}
+.at{color:var(--mute);font-size:.95rem;text-align:center;line-height:1}
 .grp{margin-top:22px}
 .grp h3{font:600 1.05rem "Barlow",sans-serif;color:var(--k);margin:0 0 6px;padding-left:10px;border-left:3px solid var(--k)}
 .row{display:grid;grid-template-columns:1fr minmax(5.5rem,auto) 1fr;gap:12px;align-items:baseline;padding:7px 0;
@@ -1480,7 +1479,7 @@ transition:background .18s,color .18s,text-shadow .18s}
 @media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
 @keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
 50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
-@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 1.6rem minmax(0,1fr);gap:6px}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 """
@@ -1527,9 +1526,9 @@ def fallback_card(ev, idx):
         tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
     except Exception:
         away, home, tip = "Away team", "Home team", ""
-    return (f'<article class="page" data-i="{idx}" style="--glow:{GLOWS[idx % len(GLOWS)]}"><header class="match">'
-            f'<span class="tip">{escape(tip)}</span><div class="teams"><h2 class="t a"><span class="tn">{escape(away)}</span></h2>'
-            f'<span class="at">at</span><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
+    return (f'<article class="page" data-i="{idx}"><header class="match">'
+            f'<div class="teams"><h2 class="t a"><span class="tn">{escape(away)}</span></h2>'
+            f'<div class="mid"><span class="at">at</span><span class="tip">{escape(tip)}</span></div><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
             f'<p class="calm">Details for this game could not be loaded this hour. They should return on the next update.</p></article>')
 
 
@@ -1583,7 +1582,7 @@ def main():
 <main id="app">
 <div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
 {cards}
-<div class="legend"><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
+<div class="legend"><span><i style="--k:var(--c-flags)"></i>What stands out</span><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge, rivalry &amp; head to head</span>
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-outlook)"></i>Season outlook</span><span><i style="--k:var(--c-age)"></i>Age, roster &amp; coach</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
