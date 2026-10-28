@@ -10,11 +10,12 @@ permissions:
 
 concurrency:
   group: briefing
-  cancel-in-progress: true
+  cancel-in-progress: false   # let a running build finish instead of cancelling it
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,6 +27,10 @@ jobs:
           git config user.email "briefing-bot@users.noreply.github.com"
           git add docs/index.html
           if [ -f data/possessions.json ]; then git add data/possessions.json; fi
-          git diff --staged --quiet || git commit -m "Update briefing"
-          git pull --rebase origin main || true
-          git push
+          git diff --staged --quiet && exit 0
+          git commit -m "Update briefing"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            sleep 5
+          done
+          echo "Could not push after 3 tries"; exit 1
