@@ -642,7 +642,7 @@ def head_to_head(a_id, b_id, season, today):
     return {"n": len(games), "a": aw, "b": len(games) - aw,
             "margin": sum(g["our"] - g["their"] for g in games) / len(games),
             "last": games[0], "streak_a": streak_team_a, "streak": streak,
-            "oldest": games[-1]["date"]}
+            "oldest": games[-1]["date"], "games": games}
 
 
 # ---------------------------------------------------------------------------
@@ -993,7 +993,7 @@ def load_ppp(today, season):
         rp = sum(x[3] for x in rec)
         res[tid] = {"abbr": t["abbr"], "g": t["g"], "off": t["pts"] / t["poss"], "def": t["opp"] / t["poss"],
                     "pace": t["pace"] / t["g"], "off5": sum(x[1] for x in rec) / rp, "def5": sum(x[2] for x in rec) / rp,
-                    "pace5": sum(x[4] for x in rec) / len(rec)}
+                    "pace5": sum(x[4] for x in rec) / len(rec), "p5": [x[4] for x in rec]}
         res[tid]["net"] = res[tid]["off"] - res[tid]["def"]
         c, co = t["clk"], t["clk_opp"]
         if c[1] >= 150 and co[1] >= 150 and 8 <= c[0] / c[1] <= 20 and 8 <= co[0] / co[1] <= 20:
@@ -1012,7 +1012,13 @@ def load_ppp(today, season):
         order = sorted(ranked, key=lambda k: res[k][key], reverse=rev)
         for i, k in enumerate(order, 1):
             res[k][name] = i
-    _ppp = {"teams": res, "n": len(ranked), "games": len(cache["games"]), "bad": bad, "days": days_seen[-3:], "notes": list(_ppp_notes)}
+    lg = {}
+    pool = [k for k in ranked if res[k]["g"] >= PPP_MIN_GAMES] or ranked
+    for key in ("off", "def", "net", "pace", "sc"):
+        vals = [res[k][key] for k in pool if key in res[k]]
+        if len(vals) >= 2:
+            lg[key] = (min(vals), max(vals), sum(vals) / len(vals))
+    _ppp = {"teams": res, "n": len(ranked), "games": len(cache["games"]), "bad": bad, "days": days_seen[-3:], "notes": list(_ppp_notes), "lg": lg}
     print(f"PPP: {len(cache['games'])} games cached ({new} new, {bad} unreadable); {len(ranked)} teams")
     return _ppp
 
@@ -1088,6 +1094,145 @@ def section(title, k, rows):
     if not rows:
         return ""
     return f'<section class="grp" style="--k:var(--c-{k})"><h3>{escape(title)}</h3>{rows}</section>'
+
+
+# ---------------------------------------------------------------------------
+# Small charts (plain HTML/SVG, no libraries). Each one is wrapped in _safe so a
+# bad number can never take down a game page.
+# ---------------------------------------------------------------------------
+def _safe(fn, *args):
+    try:
+        return fn(*args) or ""
+    except Exception as e:
+        print(f"WARNING: chart {getattr(fn, '__name__', '?')} skipped: {e}")
+        return ""
+
+
+def _frac(v, rng, flip=False):
+    """Position of v inside the league (low, high, avg) range, 0..1. flip=True when a lower value is better."""
+    lo, hi = rng[0], rng[1]
+    x = (v - lo) / (hi - lo) if hi > lo else 0.5
+    x = min(1.0, max(0.0, x))
+    return 1 - x if flip else x
+
+
+def mbar(frac, strong):
+    return f'<div class="mbar{"" if strong else " lo"}"><i style="width:{max(6.0, frac * 100):.0f}%"></i></div>'
+
+
+def mirror_row(label, a_txt, h_txt, fa, fh, k):
+    """A normal row plus a bar under each number; the longer bar is the better (or faster) team."""
+    if fa is None or fh is None:
+        return row(label, a_txt, h_txt, k)
+    return row(label, a_txt + mbar(fa, fa >= fh), h_txt + mbar(fh, fh >= fa), k)
+
+
+def form_strip(info):
+    gs = ((info or {}).get("hist") or [])[-10:]
+    if not gs:
+        return ""
+    cells = "".join(
+        f'<i class="{"w" if g["win"] else "l"}" title="{escape(("W" if g["win"] else "L") + f" {g['our_score']:.0f}-{g['opp_score']:.0f} " + ("vs " if g["home"] else "at ") + g["opp_abbr"] + f", {g['date']:%b %-d}")}"></i>'
+        for g in gs)
+    return f'<div class="strip">{cells}</div>'
+
+
+def rest_strip(info, today):
+    played = {g["date"]: g for g in ((info or {}).get("hist") or [])}
+    cells = []
+    for k in range(6, -1, -1):
+        d = today - timedelta(days=k)
+        if k == 0:
+            cells.append('<i class="t" title="Tonight"></i>')
+            continue
+        g = played.get(d)
+        if g:
+            t = f"{d:%a %b %-d}: {'W' if g['win'] else 'L'} {g['our_score']:.0f}-{g['opp_score']:.0f} " + ("vs " if g["home"] else "at ") + g["opp_abbr"]
+            cells.append(f'<i class="p" title="{escape(t)}"></i>')
+        else:
+            cells.append(f'<i class="o" title="{d:%a %b %-d}: no game"></i>')
+    return f'<div class="days">{"".join(cells)}</div>'
+
+
+def stack(early, late):
+    mid = max(0.0, 100 - early - late)
+    seg = lambda w, c: f'<i class="{c}" style="width:{w:.1f}%">{f"{w:.0f}%" if w >= 11 else ""}</i>'
+    return f'<div class="stack">{seg(early, "s1")}{seg(mid, "s2")}{seg(late, "s3")}</div>'
+
+
+def spark(vals, avg, w=116, h=34):
+    if len(vals) < 2:
+        return ""
+    lo, hi = min(vals + [avg]) - 1, max(vals + [avg]) + 1
+    X = lambda i: 4 + i * (w - 8) / (len(vals) - 1)
+    Y = lambda v: h - 4 - (v - lo) / (hi - lo) * (h - 8)
+    pts = " ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in enumerate(vals))
+    return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-label="pace over the last {len(vals)} games">'
+            f'<line x1="4" x2="{w - 4}" y1="{Y(avg):.1f}" y2="{Y(avg):.1f}" stroke-dasharray="3 3" style="stroke:var(--mute)" stroke-width="1"/>'
+            f'<polyline points="{pts}" fill="none" style="stroke:var(--k)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle cx="{X(len(vals) - 1):.1f}" cy="{Y(vals[-1]):.1f}" r="3.2" style="fill:var(--k)"/></svg>')
+
+
+def league_scale(pa, ph, a_abbr, h_abbr, lg):
+    tracks = [("Offense, pts per possession", "off", "worse", "better", False),
+              ("Defense, pts allowed per possession", "def", "worse", "better", True),
+              ("Pace, possessions per 48", "pace", "slower", "faster", False)]
+    if "sc" in pa and "sc" in ph:
+        tracks.append(("Seconds used before shooting", "sc", "slower", "faster", True))
+    out = []
+    for title, key, left, right, flip in tracks:
+        if key not in lg:
+            continue
+        xa, xh, xv = (_frac(v, lg[key], flip) * 100 for v in (pa[key], ph[key], lg[key][2]))
+        out.append(f'<div class="track"><div class="tl"><span>{left}</span><b>{escape(title)}</b><span>{right}</span></div>'
+                   f'<div class="rail"><u style="left:{xv:.1f}%" title="league average"></u>'
+                   f'<s class="d a" style="left:{xa:.1f}%"><em>{escape(a_abbr)}</em></s>'
+                   f'<s class="d h" style="left:{xh:.1f}%"><em>{escape(h_abbr)}</em></s></div></div>')
+    if not out:
+        return ""
+    return (f'<div class="chart"><div class="ch">Where each team sits in the league '
+            f'<span class="ka">&#9679; {escape(a_abbr)}</span> <span class="kh">&#9679; {escape(h_abbr)}</span> &middot; tick = league average</div>'
+            + "".join(out) + '</div>')
+
+
+def h2h_chart(games, a_abbr, h_abbr):
+    gs = list(reversed(games))
+    n = len(gs)
+    if n < 2:
+        return ""
+    W, mid = 300, 44
+    bw = W / n
+    mx = max(10.0, max(abs(g["our"] - g["their"]) for g in gs))
+    parts = [f'<line x1="0" x2="{W}" y1="{mid}" y2="{mid}" style="stroke:var(--line)" stroke-width="1"/>']
+    for i, g in enumerate(gs):
+        m = g["our"] - g["their"]
+        hgt = max(2.0, abs(m) / mx * 30)
+        x, w = i * bw + bw * 0.18, bw * 0.64
+        if m > 0:
+            y, fill, ty = mid - hgt, "var(--k)", mid - hgt - 3
+        else:
+            y, fill, ty = mid, "var(--ink)", mid + hgt + 9
+        tip = f"{g['date']:%b %-d, %Y}: {a_abbr if m > 0 else h_abbr} won by {abs(m):.0f}" + (" (playoffs)" if g["playoff"] else "")
+        parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{hgt:.1f}" rx="2" style="fill:{fill};opacity:{1 if m > 0 else .8}"><title>{escape(tip)}</title></rect>')
+        parts.append(f'<text x="{x + w / 2:.1f}" y="{ty:.1f}" text-anchor="middle" font-size="8" style="fill:var(--mute)">{abs(m):.0f}</text>')
+    return (f'<div class="chart"><div class="ch">Margin of each meeting</div>'
+            f'<svg viewBox="0 0 {W} 88" width="100%" role="img" aria-label="margin of victory in recent meetings">{"".join(parts)}</svg>'
+            f'<div class="cap2"><span style="color:var(--k)">&#9650; {escape(a_abbr)} won</span><span>oldest &rarr; newest</span><span>&#9660; {escape(h_abbr)} won</span></div></div>')
+
+
+def winprob_section(a_abbr, h_abbr, crowd, model_pw):
+    def bar(label, pa, k, thin):
+        pa = pa * 100
+        ph = 100 - pa
+        return (f'<div class="wp" style="--k:{k}"><div class="wph"><span>{escape(a_abbr)} {pa:.0f}%</span><b>{escape(label)}</b><span>{ph:.0f}% {escape(h_abbr)}</span></div>'
+                f'<div class="split{" thin" if thin else ""}"><i class="a" style="width:{pa:.1f}%"></i><i class="h" style="width:{ph:.1f}%"></i></div></div>')
+    rows = []
+    if crowd:
+        rows.append(bar("Crowd (Polymarket)", crowd["pa"], "var(--c-line)", False))
+    if model_pw is not None:
+        rows.append(bar("Model (my estimate)", 1 - model_pw, "var(--c-outlook)", bool(crowd)))
+    return section("Win probability", "line", rows)
+
 
 
 def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
@@ -1197,6 +1342,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             row("Record", f"{aw}-{hw}", f"{hw}-{aw}", "rivalry", dom),
             row("Avg margin", f"{m:+.1f}", f"{-m:+.1f}", "rivalry"),
             row("Streak", f"W{h2h['streak']}" if h2h["streak_a"] else "-", f"W{h2h['streak']}" if not h2h["streak_a"] else "-", "rivalry") if h2h["streak"] >= 2 else "",
+            _safe(h2h_chart, h2h["games"], a_abbr, h_abbr),
         ]
         h2h_note = (f'<p class="note" style="--k:var(--c-rivalry)"><b>Last meeting</b> {last["date"]:%b %-d, %Y}: {escape(winner)} won '
                     f'{int(max(last["our"], last["their"]))}-{int(min(last["our"], last["their"]))}'
@@ -1243,16 +1389,18 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     flags_html = f'<ul class="flags">{flags}</ul>' if flags else '<p class="calm">No flags for this game.</p>'
 
     # ---- rows ----
-    rest_rows = [row("Rest", rest_text(ai), rest_text(hi), "rest")]
+    rest_rows = [row("Rest", rest_text(ai), rest_text(hi), "rest"),
+                 row("Last 6 days", _safe(rest_strip, ai, today), _safe(rest_strip, hi, today), "rest"),
+                 '<p class="cap">filled dot = played &middot; empty dot = no game &middot; ring = tonight</p>']
     def f(form, k, none="-"):
         return escape(str(form[k])) if form and form.get(k) else none
-    def l10(form):
+    def l10(form, info=None):
         if not form:
             return "-"
         n = min(form["n_games"], 10)
-        return escape(form["last10"]) + (f"<small>{n} games played</small>" if n < 10 else "")
+        return escape(form["last10"]) + (f"<small>{n} games played</small>" if n < 10 else "") + _safe(form_strip, info)
     form_rows = [
-        row("Last 10 games", l10(af), l10(hf), "form"),
+        row("Last 10 games", l10(af, ai), l10(hf, hi), "form"),
         row("Streak", f(af, "streak"), f(hf, "streak"), "form"),
         row("Home record", f(af, "home"), f(hf, "home"), "form"),
         row("Road record", f(af, "road"), f(hf, "road"), "form"),
@@ -1275,25 +1423,34 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
                     f'Scoreboard: {escape(" | ".join(pp.get("days") or ["no dates checked"]))}. {escape(why)}</p>')
     if pa_ and ph_:
         n_t = pp["n"]
+        lg = pp.get("lg") or {}
         cell = lambda v, rk, g: f"{v:.3f}" + (f"<small>#{rk} of {n_t} &middot; {g} games</small>")
         small = " (small sample)" if not use_ppp else ""
+        fr = lambda key, a_v, h_v, flip=False: (_frac(a_v, lg[key], flip), _frac(h_v, lg[key], flip)) if key in lg else (None, None)
+        fo, fo_h = fr("off", pa_["off"], ph_["off"])
+        fd, fd_h = fr("def", pa_["def"], ph_["def"], True)
+        fn, fn_h = fr("net", pa_["net"], ph_["net"])
+        fp, fp_h = fr("pace", pa_["pace"], ph_["pace"])
         match_rows += [
-            row("Offense, pts per possession" + small, cell(pa_["off"], pa_["off_rank"], pa_["g"]), cell(ph_["off"], ph_["off_rank"], ph_["g"]), "match"),
-            row("Defense, pts allowed per possession", cell(pa_["def"], pa_["def_rank"], pa_["g"]), cell(ph_["def"], ph_["def_rank"], ph_["g"]), "match"),
-            row("Net per possession", f"{pa_['net']:+.3f}<small>#{pa_['net_rank']}</small>", f"{ph_['net']:+.3f}<small>#{ph_['net_rank']}</small>", "match"),
+            mirror_row("Offense, pts per possession" + small, cell(pa_["off"], pa_["off_rank"], pa_["g"]), cell(ph_["off"], ph_["off_rank"], ph_["g"]), fo, fo_h, "match"),
+            mirror_row("Defense, pts allowed per possession", cell(pa_["def"], pa_["def_rank"], pa_["g"]), cell(ph_["def"], ph_["def_rank"], ph_["g"]), fd, fd_h, "match"),
+            mirror_row("Net per possession", f"{pa_['net']:+.3f}<small>#{pa_['net_rank']}</small>", f"{ph_['net']:+.3f}<small>#{ph_['net_rank']}</small>", fn, fn_h, "match"),
             row("Last 5 games (off / def)", f"{pa_['off5']:.2f} / {pa_['def5']:.2f}", f"{ph_['off5']:.2f} / {ph_['def5']:.2f}", "match"),
-            row("Pace, possessions per 48", f"{pa_['pace']:.1f}<small>#{pa_['pace_rank']} of {n_t}</small>", f"{ph_['pace']:.1f}<small>#{ph_['pace_rank']} of {n_t}</small>", "match"),
+            mirror_row("Pace, possessions per 48", f"{pa_['pace']:.1f}<small>#{pa_['pace_rank']} of {n_t}</small>", f"{ph_['pace']:.1f}<small>#{ph_['pace_rank']} of {n_t}</small>", fp, fp_h, "match"),
             *([row("Seconds used before shooting", f"{pa_['sc']:.1f} s<small>#{pa_['sc_rank']} fastest &middot; estimate</small>", f"{ph_['sc']:.1f} s<small>#{ph_['sc_rank']} fastest &middot; estimate</small>", "match"),
                row("Opponents' seconds used vs. them", f"{pa_['sc_opp']:.1f} s", f"{ph_['sc_opp']:.1f} s", "match"),
-               row("Shots in first 7 seconds", f"{pa_['early']:.0f}%", f"{ph_['early']:.0f}%", "match"),
-               row("Shots after 18 seconds", f"{pa_['late']:.0f}%", f"{ph_['late']:.0f}%", "match")]
+               row("Shot timing", stack(pa_["early"], pa_["late"]), stack(ph_["early"], ph_["late"]), "match"),
+               '<p class="cap"><b class="k1">&#9632;</b> first 7 s &middot; <b class="k2">&#9632;</b> 7 to 18 s &middot; <b class="k3">&#9632;</b> after 18 s</p>']
               if "sc" in pa_ and "sc" in ph_ else []),
-            row("Pace, last 5 games", f"{pa_['pace5']:.1f}<small>{pa_['pace5'] - pa_['pace']:+.1f} vs. season</small>", f"{ph_['pace5']:.1f}<small>{ph_['pace5'] - ph_['pace']:+.1f} vs. season</small>", "match"),
+            row("Pace, last 5 games", _safe(spark, pa_.get("p5") or [], pa_["pace"]) + f"<small>{pa_['pace5']:.1f} &middot; {pa_['pace5'] - pa_['pace']:+.1f} vs. season</small>",
+                _safe(spark, ph_.get("p5") or [], ph_["pace"]) + f"<small>{ph_['pace5']:.1f} &middot; {ph_['pace5'] - ph_['pace']:+.1f} vs. season</small>", "match"),
         ]
     if fa and fh:
         for lab, key in (("Spacing", "spacing"), ("Rebounding", "rebounding"), ("Rim protection", "rim")):
             if fa.get(key) and fh.get(key):
                 match_rows.append(row(lab, rank_chip(fa[key], 30), rank_chip(fh[key], 30), "match"))
+    if pa_ and ph_:
+        match_rows.append(_safe(league_scale, pa_, ph_, a_abbr, h_abbr, pp.get("lg") or {}))
 
     age_rows = []
     if rot_a and rot_h:
@@ -1340,6 +1497,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
 
 
     outlook_rows, out_note = [], ""
+    model_pw = None
     if fa and fh:
         rec = lambda f_: f"{f_['wins']:.0f}-{f_['losses']:.0f}<small>{f_['win_low']}-{f_['win_high']} wins likely</small>"
         pct = lambda v: f"{v * 100:.0f}%" if v >= 0.01 else "&lt;1%"
@@ -1353,6 +1511,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         spread = lambda f_: (f"&plusmn;{f_['sd']:.1f} wins" + ("<small>wide range</small>" if f_["sd_rank"] <= 5 else "<small>narrow range</small>" if f_["sd_rank"] >= 26 else "")) if f_.get("sd") else "-"
         outlook_rows.append(row("Outlook spread", spread(fa), spread(fh), "outlook"))
         pw, edge = model_win_prob(fa, fh)
+        model_pw = pw
         fav, favp = (h_abbr, pw) if pw >= 0.5 else (a_abbr, 1 - pw)
         out_note = (f'<p class="note" style="--k:var(--c-outlook)"><b>Model view</b> {escape(fav)} wins {favp * 100:.0f}% of the time, '
                     f'by about {abs(edge):.1f} points. This is my estimate from the forecast file team strengths plus home court, '
@@ -1368,8 +1527,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             (da, na), (dh, nh) = crowd["money"]
             market_rows.append(row("Crowd money", f"${da:,.0f}<small>{na} trades</small>", f"${dh:,.0f}<small>{nh} trades</small>", "line"))
     market = section("Market", "line", market_rows)
-    if market and bar:
-        market = market.replace("</h3>", "</h3>" + bar, 1)
+    wp_html = _safe(winprob_section, a_abbr, h_abbr, crowd, model_pw)
     line = odds_line(comp)
     line_html = (f'<p class="note" style="--k:var(--c-line)"><b>Line</b> {escape(line)}</p>' if line else "")
 
@@ -1385,6 +1543,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span></div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
   </header>
   <section class="grp flagsec" style="--k:var(--c-flags)"><h3>What stands out</h3>{flags_html}</section>
+  {wp_html}
   {section("Rest and schedule", "rest", rest_rows)}
   {section("Form", "form", form_rows)}
   {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
@@ -1458,6 +1617,33 @@ details{margin-top:18px;border-top:1px solid var(--line);padding-top:10px}
 summary{cursor:pointer;font-weight:600;color:var(--c-rivalry)}
 details ul{margin:8px 0 0;padding-left:18px}details li{margin:6px 0;color:var(--mute)}details li b{color:var(--ink)}
 details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
+.mbar{height:7px;border-radius:99px;background:color-mix(in srgb,var(--k) 16%,var(--bg));margin-top:5px;overflow:hidden}
+.mbar i{display:block;height:100%;background:var(--k);border-radius:99px}.mbar.lo i{opacity:.5}
+.v.a .mbar i{margin-left:auto}
+.strip,.days{display:flex;gap:3px;margin-top:6px}.v.a .strip,.v.a .days{justify-content:flex-end}
+.strip i{flex:0 1 14px;min-width:6px;height:12px;border-radius:3px;border:2px solid var(--k)}.strip i.w{background:var(--k)}
+.days{gap:5px;margin-top:0}.days i{flex:none;width:13px;height:13px;border-radius:50%;border:2px solid color-mix(in srgb,var(--k) 45%,transparent)}
+.days i.p{background:var(--k);border-color:var(--k)}.days i.t{border-color:var(--ink);box-shadow:0 0 0 2px color-mix(in srgb,var(--ink) 25%,transparent)}
+.cap{margin:2px 0 0;color:var(--mute);font-size:.8rem;text-align:center}.cap b{font-weight:400}
+.k1{color:var(--c-match)}.k2{color:color-mix(in srgb,var(--c-match) 38%,var(--bg))}.k3{color:color-mix(in srgb,var(--c-match) 65%,#fff)}
+.stack{display:flex;height:18px;border-radius:6px;overflow:hidden;margin-top:3px}
+.stack i{display:block;font:600 .72rem/18px "Barlow",sans-serif;text-align:center;font-style:normal;overflow:hidden;white-space:nowrap}
+.stack .s1{background:var(--k);color:#111}.stack .s2{background:color-mix(in srgb,var(--k) 38%,var(--bg));color:var(--ink)}.stack .s3{background:color-mix(in srgb,var(--k) 65%,#fff);color:#111}
+.spark{display:block;max-width:100%;height:auto}.v.a .spark{margin-left:auto}
+.chart{margin:12px 0 0;padding:10px 12px 8px;border:1px solid color-mix(in srgb,var(--k) 35%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--k) 6%,transparent)}
+.ch{color:var(--k);font-size:.85rem;font-weight:600;margin-bottom:6px}.ch .ka{color:var(--k)}.ch .kh{color:var(--ink);margin-left:6px}
+.cap2{display:flex;justify-content:space-between;gap:8px;color:var(--mute);font-size:.78rem}
+.track{margin:0 0 4px}.tl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.78rem;color:var(--mute)}.tl b{color:var(--ink);font-weight:600;font-size:.82rem;text-align:center}
+.rail{position:relative;height:6px;margin:19px 14px 21px;border-radius:99px;background:linear-gradient(90deg,color-mix(in srgb,var(--k) 8%,var(--bg)),color-mix(in srgb,var(--k) 45%,var(--bg)))}
+.rail u{position:absolute;top:-5px;width:2px;height:16px;background:var(--mute);transform:translateX(-50%);border-radius:2px;text-decoration:none}
+.rail .d{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--bg);text-decoration:none}
+.rail .d.a{background:var(--k)}.rail .d.h{background:var(--ink)}
+.rail .d em{position:absolute;left:50%;transform:translateX(-50%);font:600 .72rem/1 "Barlow",sans-serif;font-style:normal;white-space:nowrap}
+.rail .d.a em{bottom:15px;color:var(--k)}.rail .d.h em{top:15px;color:var(--ink)}
+.wp{margin:8px 0 12px}.wph{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:baseline;font-weight:600}
+.wph span:first-child{text-align:right}.wph b{color:var(--k);font-size:.85rem}
+.split{display:flex;height:12px;border-radius:99px;overflow:hidden;margin-top:5px;gap:2px}.split.thin{height:7px}
+.split i{display:block}.split .a{background:var(--k)}.split .h{background:color-mix(in srgb,var(--k) 35%,var(--bg))}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
