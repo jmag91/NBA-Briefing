@@ -753,6 +753,116 @@ def model_win_prob(fa, fh):
 
 
 # ---------------------------------------------------------------------------
+# First half vs. second half, from the quarter-by-quarter scores ESPN lists on its scoreboard.
+# Regular season only; overtime is left out of both halves. Finished games are kept in
+# data/halves.json so each run only reads the days that are not finished yet.
+# ---------------------------------------------------------------------------
+HALF_MIN_GAMES = 3      # show the numbers from this many games
+HALF_TAG_GAMES = 8      # only call a team a fast starter / strong finisher from this many games
+HALF_TAG_SHIFT = 3.0    # points per game, second-half margin minus first-half margin
+MAX_HALF_DAYS = 250
+_halves = None
+
+
+def _linescores(c):
+    out = []
+    for x in c.get("linescores") or []:
+        v = x.get("value") if isinstance(x, dict) else x
+        try:
+            out.append(float(v))
+        except (TypeError, ValueError):
+            return None
+    return out
+
+
+def load_halves(today, season):
+    global _halves
+    if _halves is not None:
+        return _halves
+    _halves = {"teams": {}, "n": 0, "games": 0, "bad": 0, "lg": {}, "note": ""}
+    path = os.path.join(os.path.dirname(__file__) or ".", "data", "halves.json")
+    cache = {"games": {}, "dates_done": []}
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                cache = json.load(f)
+            cache.setdefault("games", {})
+            cache.setdefault("dates_done", [])
+    except Exception as e:
+        print(f"WARNING: could not read halves cache: {e}")
+    start = SEASON_STARTS.get(season)
+    if not start:
+        _halves["note"] = "no season start date on file"
+        return _halves
+    d, calls, new, bad = date(*start), 0, 0, 0
+    try:
+        while d <= today and calls < MAX_HALF_DAYS:
+            ds = d.strftime("%Y%m%d")
+            if ds in cache["dates_done"] and d < today - timedelta(days=1):
+                d += timedelta(days=1)
+                continue
+            calls += 1
+            sb = get(f"{API}/scoreboard?dates={ds}")
+            all_final = True
+            for ev in sb.get("events", []):
+                comp = ev["competitions"][0]
+                if not comp.get("status", {}).get("type", {}).get("completed"):
+                    all_final = False
+                    continue
+                stype = (ev.get("season") or {}).get("type") or (sb.get("season") or {}).get("type")
+                if stype is not None and stype != 2:
+                    continue
+                if ev["id"] in cache["games"]:
+                    continue
+                teams = {}
+                for c in comp["competitors"]:
+                    ls = _linescores(c)
+                    sc = float((c.get("score") or {}).get("value", 0) if isinstance(c.get("score"), dict) else c.get("score") or 0)
+                    if not ls or len(ls) < 4 or abs(sum(ls) - sc) > 1.5:
+                        teams = None
+                        break
+                    teams[str(c["team"]["id"])] = [ls[0] + ls[1], ls[2] + ls[3], sum(ls[4:])]
+                if not teams or len(teams) != 2:
+                    bad += 1
+                    all_final = False
+                    continue
+                cache["games"][ev["id"]] = {"d": ds, "t": teams}
+                new += 1
+            if all_final and ds not in cache["dates_done"]:
+                cache["dates_done"].append(ds)
+            d += timedelta(days=1)
+    except Exception as e:
+        print(f"WARNING: halves update stopped early: {e}")
+    if new:
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(cache, f, separators=(",", ":"))
+        except Exception as e:
+            print(f"WARNING: could not save halves cache: {e}")
+    per = {}
+    for g in sorted(cache["games"].values(), key=lambda g: g["d"]):
+        (ida, a), (idb, b) = list(g["t"].items())
+        for tid, mine, theirs in ((ida, a, b), (idb, b, a)):
+            per.setdefault(tid, []).append({"d": g["d"], "f1": mine[0], "a1": theirs[0], "f2": mine[1], "a2": theirs[1]})
+    res = {}
+    for tid, gl in per.items():
+        n = len(gl)
+        avg = lambda k: sum(x[k] for x in gl) / n
+        r = {"g": n, "f1": avg("f1"), "a1": avg("a1"), "f2": avg("f2"), "a2": avg("a2"), "games": gl[-10:]}
+        r["m1"], r["m2"] = r["f1"] - r["a1"], r["f2"] - r["a2"]
+        r["shift_f"], r["shift_a"], r["shift"] = r["f2"] - r["f1"], r["a2"] - r["a1"], r["m2"] - r["m1"]
+        res[tid] = r
+    pool = [k for k in res if res[k]["g"] >= HALF_MIN_GAMES] or list(res)
+    for key, name in (("m1", "r1"), ("m2", "r2"), ("shift", "rs")):
+        for i, k in enumerate(sorted(pool, key=lambda k: res[k][key], reverse=True), 1):
+            res[k][name] = i
+    _halves = {"teams": res, "n": len(pool), "games": len(cache["games"]), "bad": bad, "lg": {}, "note": ""}
+    print(f"Halves: {len(cache['games'])} games cached ({new} new, {bad} without quarter scores); {len(res)} teams")
+    return _halves
+
+
+# ---------------------------------------------------------------------------
 # Points per possession, from real box scores (regular season only)
 # Possessions = FGA + 0.44*FTA - OREB + TOV, averaged over both teams in the game.
 # Finished games are cached in data/possessions.json so each run only fetches new ones.
@@ -1220,6 +1330,81 @@ def h2h_chart(games, a_abbr, h_abbr):
             f'<div class="cap2"><span style="color:var(--k)">&#9650; {escape(a_abbr)} won</span><span>oldest &rarr; newest</span><span>&#9660; {escape(h_abbr)} won</span></div></div>')
 
 
+def half_chart(games, mx):
+    """Per game: 1st-half margin (light bar) and 2nd-half margin (solid bar); up = outscored the opponent."""
+    n = len(games)
+    if n < 1:
+        return ""
+    W, H, mid = 130, 52, 26
+    slot = W / 10
+    parts = [f'<line x1="0" x2="{W}" y1="{mid}" y2="{mid}" style="stroke:var(--line)" stroke-width="1"/>']
+    for i, g in enumerate(games):
+        x0 = i * slot
+        for j, (m, solid) in enumerate((((g["f1"] - g["a1"]), False), ((g["f2"] - g["a2"]), True))):
+            h = max(1.5, abs(m) / mx * (mid - 3))
+            y = mid - h if m >= 0 else mid
+            label = f"{g['d'][4:6]}/{g['d'][6:]} {'2nd' if solid else '1st'} half: {m:+.0f}"
+            parts.append(f'<rect x="{x0 + 1 + j * 5.6:.1f}" y="{y:.1f}" width="5.2" height="{h:.1f}" rx="1.2" '
+                         f'style="fill:var(--k);opacity:{1 if solid else .42}"><title>{escape(label)}</title></rect>')
+    return f'<svg class="hchart" viewBox="0 0 {W} {H}" role="img" aria-label="first and second half margin for each recent game">{"".join(parts)}</svg>'
+
+
+def half_summary(ha, hh, a_abbr, h_abbr):
+    """Season average point differential in each half, one pair of bars per team."""
+    vals = [ha["m1"], ha["m2"], hh["m1"], hh["m2"]]
+    mx = max(3.0, max(abs(v) for v in vals))
+    W, H, mid, room = 300, 142, 70, 36
+    bw, gap = 46, 18
+    xs = [38, 38 + bw + 6, 38 + 2 * bw + 6 + 60, 38 + 3 * bw + 12 + 60]
+    parts = [f'<line x1="14" x2="{W - 14}" y1="{mid}" y2="{mid}" style="stroke:var(--mute)" stroke-width="1"/>']
+    meta = [(xs[0], vals[0], "1st", False, "var(--k)"), (xs[1], vals[1], "2nd", True, "var(--k)"),
+            (xs[2], vals[2], "1st", False, "var(--ink)"), (xs[3], vals[3], "2nd", True, "var(--ink)")]
+    for x, v, lab, solid, col in meta:
+        h = max(1.5, abs(v) / mx * room)
+        y = mid - h if v >= 0 else mid
+        ty = y - 4 if v >= 0 else y + h + 11
+        txt = f"{v:+.1f}".replace("-", "−")
+        parts.append(f'<rect x="{x}" y="{y:.1f}" width="{bw}" height="{h:.1f}" rx="3" style="fill:{col};opacity:{1 if solid else .45}"/>')
+        parts.append(f'<text x="{x + bw / 2}" y="{ty:.1f}" text-anchor="middle" font-size="12" font-weight="700" style="fill:{col}">{txt}</text>')
+        parts.append(f'<text x="{x + bw / 2}" y="{H - 4}" text-anchor="middle" font-size="10" style="fill:var(--mute)">{lab} half</text>')
+    parts.append(f'<text x="{(xs[0] + xs[1] + bw) / 2}" y="12" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--k)">{escape(a_abbr)}</text>')
+    parts.append(f'<text x="{(xs[2] + xs[3] + bw) / 2}" y="12" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--ink)">{escape(h_abbr)}</text>')
+    return (f'<div class="chart"><div class="ch">Average point differential in each half (+ outscores opponents, − gets outscored)</div>'
+            f'<svg class="hsum" viewBox="0 0 {W} {H}" width="100%" role="img" aria-label="average point differential in the first and second half">{"".join(parts)}</svg></div>')
+
+
+def half_rows(ha, hh, a_abbr="", h_abbr=""):
+    def pm(x):
+        return f"{x:+.1f}".replace("-", "&minus;")
+    def tilt(r):
+        if r["g"] < HALF_TAG_GAMES:
+            return ""
+        if r["shift"] >= HALF_TAG_SHIFT:
+            return "strong finisher"
+        if r["shift"] <= -HALF_TAG_SHIFT:
+            return "fast starter"
+        return "even"
+    h1 = lambda r: f"{r['f1']:.1f} / {r['a1']:.1f}<small>{pm(r['m1'])} net &middot; #{r['r1']}</small>"
+    h2 = lambda r: f"{r['f2']:.1f} / {r['a2']:.1f}<small>{pm(r['m2'])} net &middot; #{r['r2']}</small>"
+    sh = lambda r, k: pm(r[k])
+    shn = lambda r: f"{pm(r['shift'])}" + (f"<small>{tilt(r)} &middot; #{r['rs']}</small>" if tilt(r) else "")
+    dom = ""
+    if abs(ha["shift"] - hh["shift"]) >= 1.0:
+        dom = "a" if ha["shift"] > hh["shift"] else "h"
+    mx = max([10.0] + [abs(g[k1] - g[k2]) for r in (ha, hh) for g in r["games"] for k1, k2 in (("f1", "a1"), ("f2", "a2"))])
+    rows = [
+        _safe(half_summary, ha, hh, a_abbr, h_abbr),
+        row("1st half: scored / allowed", h1(ha), h1(hh), "half"),
+        row("2nd half: scored / allowed", h2(ha), h2(hh), "half"),
+        row("Scoring, 2nd half minus 1st", sh(ha, "shift_f"), sh(hh, "shift_f"), "half"),
+        row("Allowed, 2nd half minus 1st", sh(ha, "shift_a"), sh(hh, "shift_a"), "half"),
+        row("Margin, 2nd half minus 1st", shn(ha), shn(hh), "half", dom),
+        row("Each of the last 10 games", _safe(half_chart, ha["games"], mx), _safe(half_chart, hh["games"], mx), "half"),
+        '<p class="cap">Per game averages, regular season, overtime left out. Chart: light bar = 1st half, solid bar = 2nd half, up = outscored the opponent.</p>',
+    ]
+    return rows
+
+
 def winprob_section(a_abbr, h_abbr, crowd, model_pw):
     def bar(label, pa, k, thin):
         pa = pa * 100
@@ -1297,6 +1482,16 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             fast, slow = (a_abbr, h_abbr) if ra < rh else (h_abbr, a_abbr)
             rtags.append(("outlook", f"Pace clash: {fast} wants to run, {slow} wants to slow it down"))
     tags += rtags
+    hv = load_halves(today, season)
+    hv_a, hv_h = hv["teams"].get(str(a_id)), hv["teams"].get(str(h_id))
+    use_halves = bool(hv_a and hv_h and hv_a["g"] >= HALF_MIN_GAMES and hv_h["g"] >= HALF_MIN_GAMES)
+    if use_halves:
+        for r_, ab in ((hv_a, a_abbr), (hv_h, h_abbr)):
+            if r_["g"] >= HALF_TAG_GAMES and abs(r_["shift"]) >= HALF_TAG_SHIFT:
+                if r_["shift"] > 0:
+                    tags.append(("half", f"{ab} is a strong finisher: {r_['m1']:+.1f} in first halves, {r_['m2']:+.1f} in second halves"))
+                else:
+                    tags.append(("half", f"{ab} is a fast starter: {r_['m1']:+.1f} in first halves, {r_['m2']:+.1f} in second halves"))
     fa, fh = fc_team(away["team"]), fc_team(home["team"])
     ag, hg = _ages.get(a_id), _ages.get(h_id)
     roster_a = sum(ag) / len(ag) if ag else None
@@ -1452,6 +1647,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     if pa_ and ph_:
         match_rows.append(_safe(league_scale, pa_, ph_, a_abbr, h_abbr, pp.get("lg") or {}))
 
+    half_sec = section("First half vs. second half", "half", half_rows(hv_a, hv_h, a_abbr, h_abbr)) if use_halves else ""
     age_rows = []
     if rot_a and rot_h:
         older_rot = "a" if rot_a - rot_h >= AGE_GAP_TAG else "h" if rot_h - rot_a >= AGE_GAP_TAG else ""
@@ -1549,6 +1745,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
   {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
   {section(f"Season outlook (forecast as of {load_forecast()['as_of']})" if fa and fh else "Season outlook", "outlook", outlook_rows)}{out_note}
   {section("Matchup", "match", match_rows)}{ppp_note}
+  {half_sec}
   {section("Roster", "age", age_rows)}
   {section("Injuries", "injury", inj_rows)}
   {market}
@@ -1559,7 +1756,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
 CSS = """
 :root{color-scheme:dark;--bg:#262624;--card:#30302e;--ink:#f0eee6;--mute:#b0aea5;--line:#4a4945;--glow:#ffb86b;--c-flags:#f0eee6;
 --c-rest:#ff9a62;--c-travel:#4dc9e6;--c-injury:#ff6b6b;--c-rivalry:#b79cff;--c-match:#4fd8b4;
---c-outlook:#6aa9ff;--c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2}
+--c-outlook:#6aa9ff;--c-form:#ffd24d;--c-age:#ff8fc0;--c-line:#7fd96b;--c-ref:#9db2c2;--c-half:#e879f9}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Barlow",system-ui,sans-serif;
 padding:0 16px 48px}
@@ -1608,7 +1805,10 @@ border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
 .flags li i{flex:none;width:9px;height:9px;border-radius:50%;background:currentColor;transform:translateY(-1px)}
 .fatigue,.schedule{color:var(--c-rest)}.altitude,.travel{color:var(--c-travel)}.injury{color:var(--c-injury)}
 .outlook{color:var(--c-outlook)}.revenge{color:var(--c-rivalry)}.mismatch,.lockdown{color:var(--c-match)}.form{color:var(--c-form)}.age{color:var(--c-age)}
+.half{color:var(--c-half)}
 .calm{margin:0;color:var(--mute)}
+.hsum{display:block;max-width:440px;margin:0 auto}
+.hchart{display:block;width:100%;max-width:170px;height:auto}.v.a .hchart{margin-left:auto}
 .bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--k) 22%,var(--bg));margin:4px 0 6px;overflow:hidden}
 .bar span{display:block;height:100%;background:var(--k);border-radius:99px 0 0 99px}
 .note{margin:16px 0 0;padding-left:10px;border-left:3px solid var(--k)}.note b{color:var(--k);margin-right:8px}
@@ -1768,7 +1968,7 @@ def main():
 <main id="app">
 <div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
 {cards}
-<div class="legend"><span><i style="--k:var(--c-flags)"></i>What stands out</span><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
+<div class="legend"><span><i style="--k:var(--c-flags)"></i>What stands out</span><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-half)"></i>First vs. second half</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge, rivalry &amp; head to head</span>
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-outlook)"></i>Season outlook</span><span><i style="--k:var(--c-age)"></i>Age, roster &amp; coach</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
