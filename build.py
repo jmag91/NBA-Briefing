@@ -17,7 +17,7 @@ docs/index.html with:
 
 Designed to run free via GitHub Actions every morning.
 """
-import json, math, os, sys, time, traceback, unicodedata, zipfile, urllib.error, urllib.parse, urllib.request
+import json, math, os, re, sys, time, traceback, unicodedata, zipfile, urllib.error, urllib.parse, urllib.request
 from datetime import date, datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
@@ -1196,7 +1196,9 @@ def record_text(comp_team, info):
 def name_block(comp_team, info):
     t = comp_team["team"]
     rec = escape(record_text(comp_team, info))
-    return f'<span class="tn">{escape(t["displayName"])}<small class="rec">{rec}</small></span>'
+    ab = escape(t["abbreviation"], quote=True)
+    return (f'<span class="tn">{escape(t["displayName"])}<small class="rec">{rec}</small>'
+            f'<button class="fol" type="button" data-t="{ab}" aria-pressed="false">&#9734; Interested</button></span>')
 
 
 def section(title, k, rows):
@@ -1844,6 +1846,19 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 .wph span:first-child{text-align:right}.wph b{color:var(--k);font-size:.85rem}
 .split{display:flex;height:12px;border-radius:99px;overflow:hidden;margin-top:5px;gap:2px}.split.thin{height:7px}
 .split i{display:block}.split .a{background:var(--k)}.split .h{background:color-mix(in srgb,var(--k) 35%,var(--bg))}
+.fol{display:inline-block;margin-top:7px;font:600 .78rem/1 "Barlow",sans-serif;color:var(--mute);background:transparent;border:1.5px solid var(--line);border-radius:99px;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.fol:hover{border-color:var(--ink);color:var(--ink)}.fol.on{color:#111;background:var(--glow);border-color:var(--glow)}
+.fol:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.minehead{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0;text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.chip2{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--glow);color:var(--glow);border-radius:99px;padding:3px 6px 3px 12px;font-weight:600}
+.chip2 button{background:none;border:0;color:inherit;font-size:1.15rem;line-height:1;cursor:pointer;padding:0 5px}
+.mg{margin-top:18px;padding:12px 14px 8px;border:1px solid color-mix(in srgb,var(--c-line) 40%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--c-line) 5%,transparent)}
+.mgh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;color:var(--c-line)}.mgh b{font:700 1.3rem "Barlow Condensed",sans-serif;color:var(--ink)}
+.mnum{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}.mnum small{display:block;color:var(--mute);font-size:.78rem}.mnum b{font-weight:600}
+.sg{display:block;width:100%;max-width:540px;margin:8px auto 0;height:auto}
+.sg .gl{stroke:var(--line);stroke-width:1}.sg .op{stroke:var(--mute);stroke-width:1.2;stroke-dasharray:4 3}.sg .ln{fill:none;stroke:var(--c-line);stroke-width:2.2;stroke-linejoin:round}
+.sg .pt{fill:var(--c-line)}.sg text{font:600 10px "Barlow",sans-serif}.sg .ax{fill:var(--mute);font-weight:400}.sg .oplab{fill:var(--mute)}.sg .cur{fill:var(--c-line);font-size:11px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
@@ -1865,7 +1880,7 @@ transition:background .18s,color .18s,text-shadow .18s}
 @media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
 @keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
 50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
-@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.t span{min-width:0}.t{font-size:1.3rem;gap:6px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 """
@@ -1886,7 +1901,7 @@ function show(n,dir){
   pages.forEach(function(p,k){p.classList.toggle('on',k===i)});
   pages[i].style.setProperty('--dx',(dir<0?'-12px':'12px'));
   back.disabled=i===0;fwd.disabled=i===pages.length-1;
-  cnt.textContent=(i+1)+' of '+pages.length;
+  var hasMine=!!document.getElementById('mine');cnt.textContent=pages[i].id==='mine'?'Interested':(i+1)+' of '+(pages.length-(hasMine?1:0));
   try{history.replaceState(null,'','#g'+(i+1))}catch(e){}
   window.scrollTo(0,0);
 }
@@ -1901,6 +1916,235 @@ document.addEventListener('touchend',function(e){
 var m=/^#g(\\d+)$/.exec(location.hash);show(m?parseInt(m[1],10)-1:0,1);
 })();
 """
+
+
+# ---------------------------------------------------------------------------
+# Spreads: today's point spread for every game, with the history of how it moved.
+# `python build.py --spreads` refreshes only this part (it is light enough to run every 10 minutes).
+# History is kept in data/spread_history.json; the page reads docs/spreads.json.
+# ---------------------------------------------------------------------------
+SPREADS_JSON = os.path.join("docs", "spreads.json")
+SPREAD_HIST = os.path.join("data", "spread_history.json")
+SPREAD_KEEP_S = 25 * 60       # add a point at least this often even if the line did not move
+SPREAD_STALE_S = 35 * 60      # the hourly build refreshes spreads itself only if the file is older than this
+
+
+def parse_spread(comp, a_abbr, h_abbr):
+    """-> {"line": home-team spread (negative = home favored), "total": over/under} or None."""
+    odds = comp.get("odds")
+    o = odds[0] if isinstance(odds, list) and odds else odds if isinstance(odds, dict) else None
+    if not o:
+        return None
+    det = str(o.get("details") or "").strip()
+    line = None
+    if det.upper().startswith(("EVEN", "PK", "PICK")):
+        line = 0.0
+    else:
+        m = re.match(r"([A-Za-z]{2,4})\s*([+-]?\d+(?:\.\d+)?)", det)
+        if m:
+            ab, v = m.group(1).upper(), abs(float(m.group(2)))
+            if ab == h_abbr.upper():
+                line = -v
+            elif ab == a_abbr.upper():
+                line = v
+    if line is None and isinstance(o.get("spread"), (int, float)) and isinstance(o.get("homeTeamOdds"), dict) and "favorite" in o["homeTeamOdds"]:
+        line = -abs(o["spread"]) if o["homeTeamOdds"]["favorite"] else abs(o["spread"])
+    if line is None:
+        return None
+    return {"line": float(line), "total": o.get("overUnder")}
+
+
+def _num(v):
+    try:
+        return float(str(v).replace("−", "-"))
+    except (TypeError, ValueError):
+        return 0.0 if str(v).strip().upper() in ("EVEN", "PK") else None
+
+
+def _core_open(eid):
+    """The opening home spread from ESPN's odds feed, if that feed lists one. -> float or None"""
+    try:
+        d = get(f"https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/{eid}/competitions/{eid}/odds", tries=2)
+    except Exception as e:
+        print(f"Spread: no opening line for {eid} ({e})")
+        return None
+    for it in d.get("items", []):
+        ps = (((it.get("homeTeamOdds") or {}).get("open") or {}).get("pointSpread") or {})
+        for k in ("alternateDisplayValue", "displayValue", "value"):
+            v = _num(ps.get(k))
+            if v is not None:
+                return v
+    return None
+
+
+def update_spreads(events, write=True, now_ts=None):
+    now_ts = int(now_ts or time.time())
+    hist = {"events": {}}
+    try:
+        if os.path.exists(SPREAD_HIST):
+            with open(SPREAD_HIST, encoding="utf-8") as f:
+                hist = json.load(f)
+            hist.setdefault("events", {})
+    except Exception as e:
+        print(f"WARNING: could not read spread history: {e}")
+    games = []
+    for ev in events:
+        try:
+            comp = ev["competitions"][0]
+            side = {c["homeAway"]: c for c in comp["competitors"]}
+            a, h = side["away"]["team"], side["home"]["team"]
+            eid = str(ev["id"])
+            rec = hist["events"].setdefault(eid, {"pts": [], "open": None, "tries": 0})
+            state = ((comp.get("status") or {}).get("type") or {}).get("state", "pre")
+            sp = parse_spread(comp, a["abbreviation"], h["abbreviation"]) if state == "pre" else None
+            if sp:
+                pts = rec["pts"]
+                if not pts or pts[-1][1] != sp["line"] or now_ts - pts[-1][0] >= SPREAD_KEEP_S:
+                    pts.append([now_ts, sp["line"]])
+                    if len(pts) > 400:
+                        del pts[1:len(pts) - 399]
+                rec["total"] = sp["total"]
+                rec["checked"] = now_ts
+                if rec.get("open") is None and rec.get("tries", 0) < 3:
+                    rec["tries"] = rec.get("tries", 0) + 1
+                    o = _core_open(eid)
+                    if o is not None:
+                        rec["open"] = o
+            rec["tip"] = int(parse_dt(ev["date"]).timestamp())
+            rec["state"] = state
+            rec["away"] = {"abbr": a["abbreviation"], "name": a["displayName"]}
+            rec["home"] = {"abbr": h["abbreviation"], "name": h["displayName"]}
+            pts = rec["pts"]
+            opened = rec["open"] if rec.get("open") is not None else (pts[0][1] if pts else None)
+            games.append({"id": eid, "away": rec["away"], "home": rec["home"], "tip": rec["tip"], "state": state,
+                          "open": opened, "open_src": "espn" if rec.get("open") is not None else "first",
+                          "cur": pts[-1][1] if pts else None, "total": rec.get("total"), "pts": pts,
+                          "checked": rec.get("checked")})
+        except Exception as e:
+            print(f"WARNING: spread for event {ev.get('id')} skipped: {e}")
+    for k in [k for k, v in hist["events"].items() if v.get("tip", now_ts) < now_ts - 3 * 86400]:
+        del hist["events"][k]
+    payload = {"generated": now_ts, "games": games}
+    if write:
+        try:
+            os.makedirs("docs", exist_ok=True)
+            os.makedirs("data", exist_ok=True)
+            with open(SPREAD_HIST, "w", encoding="utf-8") as f:
+                json.dump(hist, f, separators=(",", ":"))
+            with open(SPREADS_JSON, "w", encoding="utf-8") as f:
+                json.dump(payload, f, separators=(",", ":"))
+        except Exception as e:
+            print(f"WARNING: could not save spreads: {e}")
+    print(f"Spreads: {sum(1 for g in games if g['cur'] is not None)} of {len(games)} games have a line")
+    return payload
+
+
+def spreads_for_page(events):
+    """Reuse docs/spreads.json when the 10-minute job keeps it fresh, otherwise refresh it here."""
+    try:
+        if os.path.exists(SPREADS_JSON):
+            with open(SPREADS_JSON, encoding="utf-8") as f:
+                d = json.load(f)
+            ids = {str(e["id"]) for e in events}
+            if time.time() - d.get("generated", 0) < SPREAD_STALE_S and ids == {g["id"] for g in d.get("games", [])}:
+                return d
+    except Exception as e:
+        print(f"WARNING: could not read {SPREADS_JSON}: {e}")
+    return update_spreads(events)
+
+
+def spreads_only():
+    today = datetime.now(ET).date()
+    try:
+        data = get(f"{API}/scoreboard?dates={today:%Y%m%d}")
+    except Exception as e:
+        print(f"WARNING: ESPN scoreboard unavailable ({e}); spreads left as they were")
+        return
+    update_spreads(sorted(data.get("events", []), key=lambda e: e["date"]))
+
+
+JS_MINE = r"""
+(function(){
+var KEY='jmag_interest',followed=[],data=null,TZ='America/Los_Angeles';
+var el=document.getElementById('spreads');
+try{data=JSON.parse(el.textContent)}catch(e){data=null}
+var app=document.getElementById('app'),DAY=(app&&app.getAttribute('data-day'))||'';
+function load(){followed=[];try{var v=JSON.parse(localStorage.getItem(KEY)||'null');
+  if(v&&!Array.isArray(v)&&v.d===DAY&&Array.isArray(v.t))followed=v.t;else if(v)localStorage.removeItem(KEY)}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({d:DAY,t:followed}))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function tm(t){try{return new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:TZ}).format(new Date(t*1000))}catch(e){return ''}}
+function fmt(n){if(n===null||n===undefined)return '-';if(n===0)return 'PK';return (n>0?'+':'−')+Math.abs(n)}
+function sp(g,team,v){return v===null||v===undefined?null:(team===g.home.abbr?v:-v)}
+function chart(g,team){
+  var pts=(g.pts||[]).map(function(p){return [p[0],sp(g,team,p[1])]});
+  if(!pts.length)return '';
+  var W=320,H=150,L=40,R=14,T=22,B=24,op=sp(g,team,g.open),vals=pts.map(function(p){return p[1]});
+  if(op!==null)vals.push(op);
+  var lo=Math.min.apply(null,vals),hi=Math.max.apply(null,vals);
+  if(hi-lo<2){lo-=1;hi+=1}else{lo-=.5;hi+=.5}
+  var t0=pts[0][0],t1=pts[pts.length-1][0];
+  var X=function(t){return t1>t0?L+(t-t0)/(t1-t0)*(W-L-R):(L+W-R)/2};
+  var Y=function(v){return T+(v-lo)/(hi-lo)*(H-T-B)};
+  var o='<svg class="sg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(team)+' spread, opening vs. now">';
+  o+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(lo+.5*(hi-lo)).toFixed(1)+'" y2="'+Y(lo+.5*(hi-lo)).toFixed(1)+'" class="gl"/>';
+  o+='<text x="'+(L-5)+'" y="'+(T+4)+'" class="ax" text-anchor="end">'+fmt(Math.round(lo*2)/2)+'</text>';
+  o+='<text x="'+(L-5)+'" y="'+(H-B+4)+'" class="ax" text-anchor="end">'+fmt(Math.round(hi*2)/2)+'</text>';
+  if(op!==null){o+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(op).toFixed(1)+'" y2="'+Y(op).toFixed(1)+'" class="op"/>'
+    +'<text x="'+(L+4)+'" y="'+(Y(op)-4).toFixed(1)+'" class="oplab" text-anchor="start">Open '+fmt(op)+'</text>'}
+  if(pts.length>1)o+='<polyline class="ln" points="'+pts.map(function(p){return X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)}).join(' ')+'"/>';
+  pts.forEach(function(p,k){o+='<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="'+(k===pts.length-1?4.5:2.2)+'" class="pt"><title>'+esc(tm(p[0])+': '+team+' '+fmt(p[1]))+'</title></circle>'});
+  var last=pts[pts.length-1];
+  o+='<text x="'+Math.min(W-R-14,X(last[0])).toFixed(1)+'" y="'+(Y(last[1])+(Y(last[1])>H/2?-9:16)).toFixed(1)+'" class="cur" text-anchor="middle">Now '+fmt(last[1])+'</text>';
+  o+='<text x="'+L+'" y="'+(H-6)+'" class="ax" text-anchor="start">'+tm(t0)+'</text>';
+  if(t1>t0)o+='<text x="'+(W-R)+'" y="'+(H-6)+'" class="ax" text-anchor="end">'+tm(t1)+'</text>';
+  return o+'</svg><p class="cap">Higher on the chart = '+esc(team)+' more favored. Times are PT.</p>';
+}
+function gameCard(g){
+  var team=followed.indexOf(g.away.abbr)>=0?g.away.abbr:g.home.abbr;
+  var cur=sp(g,team,g.cur),op=sp(g,team,g.open),h='<div class="mg"><div class="mgh"><b>'+esc(g.away.abbr)+' at '+esc(g.home.abbr)+'</b><span>'+esc(tm(g.tip))+' PT</span></div>';
+  if(cur===null)return h+'<p class="calm">No line posted yet. It will appear here once the books post it.</p></div>';
+  var mv=cur-op,mt=Math.abs(mv)<.01?'no move':(mv<0?'moved '+Math.abs(mv)+' toward '+esc(team):'moved '+Math.abs(mv)+' away from '+esc(team));
+  h+='<div class="mnum"><div><small>Now</small><b>'+esc(team)+' '+fmt(cur)+'</b></div><div><small>'+(g.open_src==='espn'?'Opened':'First seen')+'</small><b>'+esc(team)+' '+fmt(op)+'</b></div>'
+    +'<div><small>Move</small><b>'+mt+'</b></div>'+(g.total!==null&&g.total!==undefined?'<div><small>Total</small><b>'+esc(g.total)+'</b></div>':'')+'</div>';
+  h+=chart(g,team);
+  if(g.state!=='pre')h+='<p class="cap">Game has started; the line is frozen at the last pre-game reading.</p>';
+  else if(g.open_src!=='espn')h+='<p class="cap">ESPN did not list an opening line, so "first seen" is the first reading this page recorded.</p>';
+  return h+'</div>';
+}
+function renderMine(){
+  var box=document.getElementById('mine-body');if(!box)return;
+  var games=(data&&data.games)||[],h='';
+  if(!followed.length){box.innerHTML='<p class="calm">Tap <b>&#9734; Interested</b> next to a team on any game page. Teams you pick are listed here with their spread for today, and the list clears itself tomorrow.</p>';return}
+  h+='<div class="chips">'+followed.map(function(t){return '<span class="chip2">'+esc(t)+'<button type="button" data-rm="'+esc(t)+'" aria-label="Remove '+esc(t)+'">&times;</button></span>'}).join('')+'</div>';
+  var mine=games.filter(function(g){return followed.indexOf(g.away.abbr)>=0||followed.indexOf(g.home.abbr)>=0});
+  var playing={};mine.forEach(function(g){playing[g.away.abbr]=1;playing[g.home.abbr]=1});
+  var off=followed.filter(function(t){return !playing[t]});
+  if(!data)h+='<p class="calm">Spread data is not available yet.</p>';
+  else if(!mine.length)h+='<p class="calm">None of your picked teams play today.</p>';
+  h+=mine.map(gameCard).join('');
+  if(off.length&&mine.length)h+='<p class="cap">Not playing today: '+off.map(esc).join(', ')+'.</p>';
+  if(data&&data.generated)h+='<p class="src">Spreads checked '+tm(data.generated)+' PT &middot; this page re-reads them every 10 minutes while it is open.</p>';
+  box.innerHTML=h;
+}
+function sync(){[].forEach.call(document.querySelectorAll('.fol'),function(b){var on=followed.indexOf(b.getAttribute('data-t'))>=0;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false');b.innerHTML=(on?'&#9733;':'&#9734;')+' Interested'})}
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('.fol,[data-rm]');if(!b)return;
+  var t=b.getAttribute('data-t')||b.getAttribute('data-rm'),k=followed.indexOf(t);
+  if(b.hasAttribute('data-rm')||k>=0){if(k>=0)followed.splice(k,1)}else followed.push(t);
+  save();sync();renderMine();
+});
+function refresh(){
+  if(!window.fetch)return;
+  fetch('spreads.json?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject()})
+   .then(function(d){if(d&&d.games){data=d;renderMine()}}).catch(function(){});
+}
+load();sync();renderMine();refresh();
+setInterval(refresh,600000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)refresh()});
+})();
+"""
+
 
 
 def fallback_card(ev, idx):
@@ -1954,6 +2198,16 @@ def main():
             traceback.print_exc()
             return fallback_card(e, i)
     cards = "".join(safe_card(e, i) for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
+    try:
+        spread_payload = spreads_for_page(events)
+    except Exception:
+        print("WARNING: spreads failed; the My teams page will have no lines")
+        traceback.print_exc()
+        spread_payload = {"generated": 0, "games": []}
+    spread_json = json.dumps(spread_payload, separators=(",", ":")).replace("</", "<\\/")
+    mine_page = ('<article class="page" id="mine"><header class="match"><h2 class="minehead">Interested today</h2></header>'
+                 '<div id="mine-body"></div></article>') if events else ""
+    cards += mine_page
     foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. The shot-clock rows are an estimate from play-by-play game-clock times, not official tracking data. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y") + " &middot; updated " + now.astimezone(PT).strftime("%-I:%M %p PT")
     n = len(events)
@@ -1965,7 +2219,7 @@ def main():
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&family=Oxanium:wght@700;800&display=swap">
 <style>{CSS}</style></head><body>
 <div id="gate"><h1 class="gate-title"><span>JMAG'S NBA</span><span>DAILY DIGEST</span></h1><button id="enter" type="button">Enter</button></div>
-<main id="app">
+<main id="app" data-day="{today:%Y-%m-%d}">
 <div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
 {cards}
 <div class="legend"><span><i style="--k:var(--c-flags)"></i>What stands out</span><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-half)"></i>First vs. second half</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
@@ -1973,7 +2227,7 @@ def main():
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-outlook)"></i>Season outlook</span><span><i style="--k:var(--c-age)"></i>Age, roster &amp; coach</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">{foot}</p>
-</main><script>{JS}</script></body></html>"""
+</main><script type="application/json" id="spreads">{spread_json}</script><script>{JS}</script><script>{JS_MINE}</script></body></html>"""
     os.makedirs("docs", exist_ok=True)
     with open("docs/index.html", "w", encoding="utf-8") as f:
         f.write(page)
@@ -1981,4 +2235,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--spreads" in sys.argv:
+        spreads_only()
+    else:
+        main()
