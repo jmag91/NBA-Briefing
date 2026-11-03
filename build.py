@@ -1738,7 +1738,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     tip = tip_dt.strftime("%-I:%M %p PT")
     return f"""<article class="page" data-i="{idx}">
   <header class="match">
-    <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span></div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
+    <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span>{net_html(comp)}</div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
   </header>
   <section class="grp flagsec" style="--k:var(--c-flags)"><h3>What stands out</h3>{flags_html}</section>
   {wp_html}
@@ -1782,6 +1782,7 @@ box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6p
 .tip{display:inline-block;background:var(--ink);color:var(--bg);font-weight:600;font-size:.85rem;padding:2px 11px;border-radius:99px}
 .teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(5.5rem,auto) minmax(0,1fr);gap:12px;align-items:center;margin:4px 0 4px}
 .mid{display:flex;flex-direction:column;align-items:center;gap:6px}
+.net{color:var(--mute);font:600 .78rem/1.2 "Barlow",sans-serif;text-align:center;letter-spacing:.02em}
 .t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0;display:flex;align-items:center;gap:10px}
 .t.a{justify-content:flex-end;text-align:right}.t.h{justify-content:flex-start;text-align:left}
 .tn{display:block;min-width:0}.rec{display:block;font:600 .95rem/1.2 "Barlow",system-ui,sans-serif;color:var(--mute);margin-top:3px}
@@ -1880,7 +1881,7 @@ transition:background .18s,color .18s,text-shadow .18s}
 @media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
 @keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
 50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
-@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.net{font-size:.68rem}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 """
@@ -2147,6 +2148,49 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)refr
 
 
 
+NATIONAL_NETS = {"ESPN", "ESPN2", "ABC", "NBC", "PEACOCK", "PRIME VIDEO", "AMAZON PRIME VIDEO", "AMAZON", "NBA TV", "CBS",
+                 "PARAMOUNT+", "TNT", "TBS", "TRUTV", "MAX", "HBO MAX", "FOX", "FS1", "NETFLIX", "APPLE TV", "APPLE TV+", "YOUTUBE", "NBCSN", "USA"}
+NET_RENAME = {"AMAZON PRIME VIDEO": "Prime Video", "AMAZON": "Prime Video", "PRIME VIDEO": "Prime Video", "PEACOCK": "Peacock",
+              "NBA TV": "NBA TV", "HBO MAX": "HBO Max", "MAX": "Max", "PARAMOUNT+": "Paramount+", "TRUTV": "truTV", "APPLE TV": "Apple TV", "APPLE TV+": "Apple TV+"}
+
+
+def nat_networks(comp):
+    """National TV/streaming networks for a game (local and regional channels are left out). -> list of names"""
+    found = []
+    def add(name):
+        name = " ".join(str(name or "").split())
+        if not name:
+            return
+        key = name.upper()
+        label = NET_RENAME.get(key) or (name if key not in NATIONAL_NETS or len(name) > 4 else key)
+        if label not in found:
+            found.append(label)
+    try:
+        for b in comp.get("broadcasts") or []:
+            market = str(b.get("market") or "").lower()
+            if isinstance(b.get("market"), dict):
+                market = str(b["market"].get("type") or "").lower()
+            names = b.get("names") or ([b["name"]] if b.get("name") else [])
+            if market == "national" or (not market and any(str(n).upper() in NATIONAL_NETS for n in names)):
+                for n in names:
+                    add(n)
+        for g in comp.get("geoBroadcasts") or []:
+            market = g.get("market")
+            market = str(market.get("type") if isinstance(market, dict) else market or "").lower()
+            media = g.get("media") or {}
+            name = media.get("shortName") or media.get("name")
+            if market == "national" or (not market and str(name).upper() in NATIONAL_NETS):
+                add(name)
+    except Exception as e:
+        print(f"WARNING: could not read broadcasters: {e}")
+    return found
+
+
+def net_html(comp):
+    nets = nat_networks(comp)
+    return f'<span class="net">{escape(" · ".join(nets))}</span>' if nets else ""
+
+
 def fallback_card(ev, idx):
     """Bare-bones page for a game whose full card could not be built, so one bad game never breaks the site."""
     try:
@@ -2154,11 +2198,12 @@ def fallback_card(ev, idx):
         away = next(c for c in comp if c["homeAway"] == "away")["team"]["displayName"]
         home = next(c for c in comp if c["homeAway"] == "home")["team"]["displayName"]
         tip = parse_dt(ev["date"]).astimezone(PT).strftime("%-I:%M %p PT")
+        net = net_html(ev["competitions"][0])
     except Exception:
-        away, home, tip = "Away team", "Home team", ""
+        away, home, tip, net = "Away team", "Home team", "", ""
     return (f'<article class="page" data-i="{idx}"><header class="match">'
             f'<div class="teams"><h2 class="t a"><span class="tn">{escape(away)}</span></h2>'
-            f'<div class="mid"><span class="at">at</span><span class="tip">{escape(tip)}</span></div><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
+            f'<div class="mid"><span class="at">at</span><span class="tip">{escape(tip)}</span>{net}</div><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
             f'<p class="calm">Details for this game could not be loaded this hour. They should return on the next update.</p></article>')
 
 
