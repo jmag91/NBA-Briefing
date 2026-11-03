@@ -29,6 +29,7 @@ box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 20%,transparent),0 0 34px -6p
 .tip{display:inline-block;background:var(--ink);color:var(--bg);font-weight:600;font-size:.85rem;padding:2px 11px;border-radius:99px}
 .teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(5.5rem,auto) minmax(0,1fr);gap:12px;align-items:center;margin:4px 0 4px}
 .mid{display:flex;flex-direction:column;align-items:center;gap:6px}
+.net{color:var(--mute);font:600 .78rem/1.2 "Barlow",sans-serif;text-align:center;letter-spacing:.02em}
 .t{font:700 1.9rem/1.05 "Barlow Condensed",sans-serif;margin:0;display:flex;align-items:center;gap:10px}
 .t.a{justify-content:flex-end;text-align:right}.t.h{justify-content:flex-start;text-align:left}
 .tn{display:block;min-width:0}.rec{display:block;font:600 .95rem/1.2 "Barlow",system-ui,sans-serif;color:var(--mute);margin-top:3px}
@@ -127,20 +128,20 @@ transition:background .18s,color .18s,text-shadow .18s}
 @media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
 @keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
 50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
-@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.net{font-size:.68rem}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 </style></head><body>
 <div id="gate"><h1 class="gate-title"><span>JMAG'S NBA</span><span>DAILY DIGEST</span></h1><button id="enter" type="button">Enter</button></div>
 <main id="app" data-day="2026-11-03">
-<div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">Tuesday, November 3, 2026 &middot; updated 1:33 PM PT &middot; 0 games</p></div>
+<div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">Tuesday, November 3, 2026 &middot; updated 2:01 PM PT &middot; 0 games</p></div>
 <p class="empty">No NBA games today. Check back tomorrow morning.</p>
 <div class="legend"><span><i style="--k:var(--c-flags)"></i>What stands out</span><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-half)"></i>First vs. second half</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge, rivalry &amp; head to head</span>
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
 <span><i style="--k:var(--c-outlook)"></i>Season outlook</span><span><i style="--k:var(--c-age)"></i>Age, roster &amp; coach</span><span><i style="--k:var(--c-line)"></i>Line &amp; crowd</span><span><i style="--k:var(--c-ref)"></i>Officials</span></div>
 <p class="foot">Ranks use points scored/allowed per game (ESPN, not pace-adjusted), blended with last season until a team reaches 20 games. Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. The shot-clock rows are an estimate from play-by-play game-clock times, not official tracking data. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin.</p>
-</main><script type="application/json" id="spreads">{"generated":1793741625,"games":[]}</script><script>
+</main><script type="application/json" id="spreads">{"generated":1793741748,"games":[]}</script><script>
 (function(){
 document.documentElement.classList.add('js');
 var root=document.documentElement,enter=document.getElementById('enter');
