@@ -1736,7 +1736,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
            f' &middot; updated {datetime.now(PT).strftime("%-I:%M %p PT")}</p>') if crowd else ""
 
     tip = tip_dt.strftime("%-I:%M %p PT")
-    return f"""<article class="page" data-i="{idx}">
+    return f"""<article class="page" data-i="{idx}" data-set="t" data-label="{idx + 1} of {total}">
   <header class="match">
     <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span>{net_html(comp)}</div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
   </header>
@@ -1860,6 +1860,23 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 .sg{display:block;width:100%;max-width:540px;margin:8px auto 0;height:auto}
 .sg .gl{stroke:var(--line);stroke-width:1}.sg .op{stroke:var(--mute);stroke-width:1.2;stroke-dasharray:4 3}.sg .ln{fill:none;stroke:var(--c-line);stroke-width:2.2;stroke-linejoin:round}
 .sg .pt{fill:var(--c-line)}.sg text{font:600 10px "Barlow",sans-serif}.sg .ax{fill:var(--mute);font-weight:400}.sg .oplab{fill:var(--mute)}.sg .cur{fill:var(--c-line);font-size:11px}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#menu{font:600 .85rem "Barlow",sans-serif;color:var(--mute);background:transparent;border:1.5px solid var(--line);border-radius:99px;padding:5px 12px;cursor:pointer;white-space:nowrap}
+#menu:hover{color:var(--ink);border-color:var(--ink)}
+html[data-mode="t"] .book[data-book="y"],html[data-mode="y"] .book[data-book="t"],html[data-mode="t"] .sub-y,html[data-mode="y"] .sub-t{display:none}
+.scorerow{margin:2px 0 6px}.sc{font:800 2.6rem/1 "Oxanium","Barlow Condensed",sans-serif;color:var(--mute)}.sc.a{text-align:right}.sc.h{text-align:left}.sc.win{color:var(--ink)}
+.dash{color:var(--mute);text-align:center}
+.qt{width:100%;border-collapse:collapse;margin:4px 0 10px;font-size:.92rem}.qt th,.qt td{padding:4px 6px;text-align:center;color:var(--mute);font-weight:400}.qt th:first-child{text-align:left;color:var(--ink);font-weight:600}.qt tr+tr{border-top:1px solid var(--line)}
+.hl{display:block;margin:8px 0;padding:11px 14px;border:1.5px solid var(--k);border-radius:12px;color:var(--ink);text-decoration:none;font-weight:600}
+.hl:hover{background:color-mix(in srgb,var(--k) 14%,transparent)}.hl.sm{display:inline-block;margin:0;padding:6px 11px;font-size:.85rem;white-space:nowrap}
+.yrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.yrow:first-of-type{border-top:0}
+.ys b{font-weight:600;color:var(--mute)}.ys b.win{color:var(--ink)}.ys i{color:var(--mute);font-style:normal;font-size:.85rem}.ys small{display:block;color:var(--mute)}
+.sub.ctr{text-align:center}
+.why{list-style:none;margin:10px 0 4px;padding:0}.why li{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.why li>b{flex:none;width:22px;height:22px;border-radius:50%;background:var(--c-line);color:#111;text-align:center;font-size:.8rem;line-height:22px}
+.why small{display:block;color:var(--mute);margin-top:2px}
+.sg .mk{fill:var(--c-line);stroke:var(--bg);stroke-width:2}.sg .mkn{fill:#111;font-size:10px;font-weight:700}
+.more{border:1.5px dashed var(--line);border-radius:12px;padding:6px 14px 10px;margin-top:18px}.more h3{color:var(--mute)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
@@ -1871,14 +1888,15 @@ justify-content:center;gap:clamp(40px,8vh,72px);padding:24px;text-align:center}
 .gate-title{margin:0;font:800 clamp(2.1rem,7.2vw,5.4rem)/1.04 "Oxanium","Orbitron",system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;
 background:linear-gradient(180deg,#fff 0%,#d3d7dc 46%,#6f757c 52%,#cfd3d8 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .gate-title span{display:block}
-#enter{font:700 1.1rem/1 "Oxanium",system-ui,sans-serif;letter-spacing:.38em;text-indent:.38em;text-transform:uppercase;color:#f4ff1a;background:#000;
-border:2px solid #f4ff1a;border-radius:0;padding:18px 58px;cursor:pointer;
+.gbtns{display:flex;flex-direction:column;align-items:center;gap:22px}
+.gbtn{font:700 1.1rem/1 "Oxanium",system-ui,sans-serif;letter-spacing:.2em;text-indent:.2em;white-space:nowrap;text-transform:uppercase;color:#f4ff1a;background:#000;
+border:2px solid #f4ff1a;border-radius:0;padding:18px 10px;cursor:pointer;width:min(86vw,360px);
 text-shadow:0 0 10px rgba(244,255,26,.7);
 box-shadow:0 0 10px rgba(244,255,26,.6),0 0 34px rgba(244,255,26,.28),inset 0 0 16px rgba(244,255,26,.16);
 transition:background .18s,color .18s,text-shadow .18s}
-#enter:hover{background:#f4ff1a;color:#000;text-shadow:none}
-#enter:focus-visible{outline:2px solid #fff;outline-offset:5px}
-@media (prefers-reduced-motion:no-preference){#enter{animation:breathe 3.4s ease-in-out infinite}.gate-title,#enter{animation-fill-mode:both}
+.gbtn:hover{background:#f4ff1a;color:#000;text-shadow:none}
+.gbtn:focus-visible{outline:2px solid #fff;outline-offset:5px}
+@media (prefers-reduced-motion:no-preference){.gbtn{animation:breathe 3.4s ease-in-out infinite}.gate-title,.gbtn{animation-fill-mode:both}
 @keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
 50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
 @media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.net{font-size:.68rem}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
@@ -1888,33 +1906,38 @@ transition:background .18s,color .18s,text-shadow .18s}
 
 JS = """
 (function(){
-document.documentElement.classList.add('js');
-var root=document.documentElement,enter=document.getElementById('enter');
-if(!/^#g\\d+$/.test(location.hash)){root.classList.add('gated');}
-function go(){root.classList.remove('gated');window.scrollTo(0,0)}
-if(enter)enter.onclick=go;
-document.addEventListener('keydown',function(e){if(e.key==='Enter'&&root.classList.contains('gated'))go()});
-var pages=[].slice.call(document.querySelectorAll('.page')),i=0,
-back=document.getElementById('back'),fwd=document.getElementById('fwd'),cnt=document.getElementById('count');
-if(!pages.length)return;
+var root=document.documentElement,mode='t',i=0,pages=[];
+root.classList.add('js');
+var all=[].slice.call(document.querySelectorAll('.page')),
+back=document.getElementById('back'),fwd=document.getElementById('fwd'),cnt=document.getElementById('count'),pager=document.querySelector('.pager');
+function setOf(m){return all.filter(function(p){return p.getAttribute('data-set')===m})}
 function show(n,dir){
+  if(!pages.length){pager.style.display='none';cnt.textContent='';return}
+  pager.style.display='';
   i=Math.max(0,Math.min(pages.length-1,n));
-  pages.forEach(function(p,k){p.classList.toggle('on',k===i)});
+  all.forEach(function(p){p.classList.remove('on')});
+  pages[i].classList.add('on');
   pages[i].style.setProperty('--dx',(dir<0?'-12px':'12px'));
   back.disabled=i===0;fwd.disabled=i===pages.length-1;
-  var hasMine=!!document.getElementById('mine');cnt.textContent=pages[i].id==='mine'?'Interested':(i+1)+' of '+(pages.length-(hasMine?1:0));
-  try{history.replaceState(null,'','#g'+(i+1))}catch(e){}
+  cnt.textContent=pages[i].getAttribute('data-label')||((i+1)+' of '+pages.length);
+  try{history.replaceState(null,'','#'+(mode==='t'?'g':'y')+(i+1))}catch(e){}
   window.scrollTo(0,0);
 }
-back.onclick=function(){show(i-1,-1)};fwd.onclick=function(){show(i+1,1)};
+function openBook(m,n){mode=m;root.setAttribute('data-mode',m);pages=setOf(m);root.classList.remove('gated');show(n||0,1)}
+function menu(){root.classList.add('gated');try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}window.scrollTo(0,0)}
+var hm=/^#([gy])(\\d+)$/.exec(location.hash);
+if(hm)openBook(hm[1]==='g'?'t':'y',parseInt(hm[2],10)-1);else{root.setAttribute('data-mode','t');root.classList.add('gated')}
+[].forEach.call(document.querySelectorAll('[data-go]'),function(b){b.onclick=function(){openBook(b.getAttribute('data-go'),0)}});
+document.getElementById('menu').onclick=menu;
 document.addEventListener('keydown',function(e){
+  if(root.classList.contains('gated')){if(e.key==='Enter')openBook('t',0);return}
   if(e.key==='ArrowLeft')show(i-1,-1);else if(e.key==='ArrowRight')show(i+1,1)});
+back.onclick=function(){show(i-1,-1)};fwd.onclick=function(){show(i+1,1)};
 var x0=null;
 document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
 document.addEventListener('touchend',function(e){
   if(x0===null)return;var dx=e.changedTouches[0].clientX-x0;x0=null;
-  if(Math.abs(dx)>70)show(i+(dx<0?1:-1),dx<0?1:-1)},{passive:true});
-var m=/^#g(\\d+)$/.exec(location.hash);show(m?parseInt(m[1],10)-1:0,1);
+  if(!root.classList.contains('gated')&&Math.abs(dx)>70)show(i+(dx<0?1:-1),dx<0?1:-1)},{passive:true});
 })();
 """
 
@@ -1978,6 +2001,42 @@ def _core_open(eid):
     return None
 
 
+INJ_LOG = os.path.join("data", "injury_log.json")
+
+
+def log_injuries(now_ts):
+    """Record every change on the injury report with the time we saw it, so line moves can be matched to news later."""
+    inj = load_injuries()
+    if not inj:
+        return
+    state = {}
+    for abbr, players in inj.items():
+        for p in players:
+            state[f"{abbr}|{p['name']}"] = p["status"]
+    log = {"since": now_ts, "state": {}, "changes": []}
+    try:
+        if os.path.exists(INJ_LOG):
+            with open(INJ_LOG, encoding="utf-8") as f:
+                log = json.load(f)
+    except Exception as e:
+        print(f"WARNING: could not read injury log: {e}")
+    if log.get("state"):
+        for k, new in state.items():
+            old = log["state"].get(k)
+            if old != new:
+                ab, nm = k.split("|", 1)
+                log["changes"].append([now_ts, ab, nm, old or "Not on report", new])
+        for k, old in log["state"].items():
+            if k not in state:
+                ab, nm = k.split("|", 1)
+                log["changes"].append([now_ts, ab, nm, old, "Cleared from report"])
+    log["state"] = state
+    log["changes"] = [c for c in log["changes"] if c[0] > now_ts - 3 * 86400]
+    os.makedirs("data", exist_ok=True)
+    with open(INJ_LOG, "w", encoding="utf-8") as f:
+        json.dump(log, f, separators=(",", ":"))
+
+
 def update_spreads(events, write=True, now_ts=None):
     now_ts = int(now_ts or time.time())
     hist = {"events": {}}
@@ -2027,6 +2086,7 @@ def update_spreads(events, write=True, now_ts=None):
         del hist["events"][k]
     payload = {"generated": now_ts, "games": games}
     if write:
+        _safe(log_injuries, now_ts)
         try:
             os.makedirs("docs", exist_ok=True)
             os.makedirs("data", exist_ok=True)
@@ -2191,6 +2251,291 @@ def net_html(comp):
     return f'<span class="net">{escape(" · ".join(nets))}</span>' if nets else ""
 
 
+# ---------------------------------------------------------------------------
+# Yesterday's summary: finals, box score leaders, how the line moved (and the likely reason), highlight links.
+# ---------------------------------------------------------------------------
+BIG_MOVE = 1.0     # points; a move at least this big gets a numbered marker and a reason
+SEVERITY = ("out", "doubtful", "questionable", "day-to-day", "probable", "available", "active")
+
+
+def _ptime(t):
+    return datetime.fromtimestamp(t, PT).strftime("%-I:%M %p")
+
+
+def fmt_line(team, v):
+    if v is None:
+        return "-"
+    return "PK" if v == 0 else f"{team} {'+' if v > 0 else chr(0x2212)}{abs(v):g}"
+
+
+def _read_json(path, default):
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"WARNING: could not read {path}: {e}")
+    return default
+
+
+def yt_search(q):
+    return "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(q)
+
+
+def yt_game(away, home, day):
+    return yt_search(f"{away} vs {home} full game highlights {day:%B %-d %Y}")
+
+
+def yt_top10(day):
+    return "https://www.youtube.com/@NBA/search?query=" + urllib.parse.quote_plus(f"top 10 plays {day:%B %-d}")
+
+
+def _score(c):
+    v = c.get("score")
+    if isinstance(v, dict):
+        v = v.get("value", v.get("displayValue"))
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def comp_leaders(c):
+    out = {}
+    for cat in c.get("leaders") or []:
+        nm, ls = cat.get("name"), cat.get("leaders") or []
+        if ls and nm in ("points", "rebounds", "assists"):
+            a = ls[0].get("athlete") or {}
+            out[nm] = (a.get("shortName") or a.get("displayName") or "?", ls[0].get("displayValue") or ls[0].get("value") or "")
+    return out
+
+
+def box_leaders(eid):
+    """Fallback: leaders from the box score. -> {team id: {"points": (name, n), ...}}"""
+    res = {}
+    try:
+        d = get(f"{API}/summary?event={eid}")
+        for team in (d.get("boxscore") or {}).get("players", []):
+            tid = str(team["team"]["id"])
+            blocks = team.get("statistics") or []
+            if not blocks:
+                continue
+            labels = blocks[0].get("labels") or []
+            best = {}
+            for key, lab in (("points", "PTS"), ("rebounds", "REB"), ("assists", "AST")):
+                if lab not in labels:
+                    continue
+                ix = labels.index(lab)
+                for a in blocks[0].get("athletes") or []:
+                    try:
+                        v = float((a.get("stats") or [])[ix])
+                    except (IndexError, ValueError, TypeError):
+                        continue
+                    if key not in best or v > best[key][2]:
+                        nm = (a.get("athlete") or {}).get("shortName") or (a.get("athlete") or {}).get("displayName") or "?"
+                        best[key] = (nm, f"{v:.0f}", v)
+            res[tid] = {k: (v[0], v[1]) for k, v in best.items()}
+    except Exception as e:
+        print(f"WARNING: box score leaders for {eid} failed: {e}")
+    return res
+
+
+def explain_moves(pts, changes, teams, since):
+    """Big moves between consecutive readings, each with injury-report changes recorded around the same time."""
+    out = []
+    for i in range(1, len(pts)):
+        d = pts[i][1] - pts[i - 1][1]
+        if abs(d) < BIG_MOVE:
+            continue
+        t0, t1 = pts[i - 1][0], pts[i][0]
+        cand = [c for c in changes if t0 - 900 <= c[0] <= t1 + 300 and c[1] in teams]
+        cand.sort(key=lambda c: (SEVERITY.index(c[4].lower()) if c[4].lower() in SEVERITY else 9))
+        out.append({"i": i, "t0": t0, "t1": t1, "frm": pts[i - 1][1], "to": pts[i][1], "d": d,
+                    "causes": cand[:3], "tracked": since is not None and t0 >= since - 600})
+    out.sort(key=lambda m: -abs(m["d"]))
+    keep = sorted(out[:6], key=lambda m: m["i"])
+    for n, m in enumerate(keep, 1):
+        m["n"] = n
+    return keep
+
+
+def move_chart(pts, open_v, home, moves):
+    """SVG: the home team's spread from the opener through every reading to tip-off. Higher = home more favored."""
+    W, H, L, R, T, B = 320, 170, 40, 16, 24, 28
+    vals = [p[1] for p in pts] + ([open_v] if open_v is not None else [])
+    lo, hi = min(vals), max(vals)
+    lo, hi = (lo - 1, hi + 1) if hi - lo < 2 else (lo - .5, hi + .5)
+    t0, t1 = pts[0][0], pts[-1][0]
+    X = lambda t: L + (t - t0) / (t1 - t0) * (W - L - R) if t1 > t0 else (L + W - R) / 2
+    Y = lambda v: T + (v - lo) / (hi - lo) * (H - T - B)
+    lab = lambda v: "PK" if v == 0 else f"{'+' if v > 0 else chr(0x2212)}{abs(v):g}"
+    o = [f'<svg class="sg" viewBox="0 0 {W} {H}" role="img" aria-label="{escape(home)} spread from open to tip-off">']
+    o.append(f'<text x="{L - 5}" y="{T + 4}" class="ax" text-anchor="end">{lab(round(lo * 2) / 2)}</text>')
+    o.append(f'<text x="{L - 5}" y="{H - B + 4}" class="ax" text-anchor="end">{lab(round(hi * 2) / 2)}</text>')
+    if open_v is not None:
+        o.append(f'<line x1="{L}" x2="{W - R}" y1="{Y(open_v):.1f}" y2="{Y(open_v):.1f}" class="op"/>'
+                 f'<text x="{L + 4}" y="{Y(open_v) - 4:.1f}" class="oplab">Open {lab(open_v)}</text>')
+    if len(pts) > 1:
+        o.append('<polyline class="ln" points="' + " ".join(f"{X(p[0]):.1f},{Y(p[1]):.1f}" for p in pts) + '"/>')
+    for p in pts:
+        o.append(f'<circle cx="{X(p[0]):.1f}" cy="{Y(p[1]):.1f}" r="2.2" class="pt"><title>{escape(_ptime(p[0]) + " PT: " + home + " " + lab(p[1]))}</title></circle>')
+    for m in moves:
+        x, y = X(m["t1"]), Y(m["to"])
+        o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" class="mk"/><text x="{x:.1f}" y="{y + 3.6:.1f}" class="mkn" text-anchor="middle">{m["n"]}</text>')
+    lx, ly = X(t1), Y(pts[-1][1])
+    o.append(f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="4.8" class="pt"/>'
+             f'<text x="{min(lx, W - R - 20):.1f}" y="{ly + (-11 if ly > H / 2 else 18):.1f}" class="cur" text-anchor="middle">Close {lab(pts[-1][1])}</text>')
+    o.append(f'<text x="{L}" y="{H - 8}" class="ax">{_ptime(t0)}</text>')
+    if t1 > t0:
+        o.append(f'<text x="{W - R}" y="{H - 8}" class="ax" text-anchor="end">{_ptime(t1)} (tip-off)</text>')
+    o.append('</svg>')
+    return "".join(o) + f'<p class="cap">Higher on the chart = {escape(home)} more favored. Times are PT.</p>'
+
+
+def line_section(rec, home_abbr, away_abbr, fallback_line):
+    pts = (rec or {}).get("pts") or []
+    if not pts and fallback_line is not None:
+        pts = [[0, fallback_line]]
+    if not pts:
+        return '<section class="grp" style="--k:var(--c-line)"><h3>Line movement</h3><p class="calm">No line was recorded for this game.</p></section>'
+    close = pts[-1][1]
+    open_v = rec.get("open") if rec and rec.get("open") is not None else pts[0][1]
+    src = "Opened" if rec and rec.get("open") is not None else "First seen"
+    mv = close - open_v
+    mt = "no move" if abs(mv) < .01 else (f"{abs(mv):g} toward {home_abbr}" if mv < 0 else f"{abs(mv):g} toward {away_abbr}")
+    rows = [row(src + " / closed at tip-off", fmt_line(home_abbr, open_v), f"{escape(fmt_line(home_abbr, close))}<small>{'no net move' if mt == 'no move' else 'moved ' + escape(mt)}</small>", "line")]
+    out = [f'<section class="grp" style="--k:var(--c-line)"><h3>Line movement</h3>' + "".join(rows)]
+    if len(pts) < 2 or pts[0][0] == 0:
+        out.append('<p class="calm">Only one reading was recorded, so there is no graph for this game. The 10-minute tracker fills this in from the next game day.</p>')
+    else:
+        log = _read_json(INJ_LOG, {"changes": [], "since": None})
+        moves = explain_moves(pts, log.get("changes", []), {home_abbr, away_abbr}, log.get("since"))
+        out.append(move_chart(pts, open_v, home_abbr, moves))
+        if moves:
+            items = []
+            for m in moves:
+                head = f'{_ptime(m["t0"])}&ndash;{_ptime(m["t1"])}: {escape(fmt_line(home_abbr, m["frm"]))} &rarr; {escape(fmt_line(home_abbr, m["to"]))}'
+                if m["causes"]:
+                    why = "Possible cause: " + "; ".join(
+                        f'{escape(c[2])} ({escape(c[1])}) {escape(str(c[3]))} &rarr; {escape(str(c[4]))} at {_ptime(c[0])}' for c in m["causes"])
+                elif not m["tracked"]:
+                    why = "No clear cause. Injury tracking had not started yet at this time."
+                else:
+                    why = "No clear cause found. No injury-report change was recorded in that window, so this looks like general market movement."
+                items.append(f'<li><b>{m["n"]}</b><div>{head}<small>{why}</small></div></li>')
+            out.append('<ol class="why">' + "".join(items) + '</ol>')
+        else:
+            out.append('<p class="calm">No single move was a full point or more. The line only drifted.</p>')
+    out.append('</section>')
+    return "".join(out)
+
+
+def y_game_page(ev, idx, total, day, hist):
+    comp = ev["competitions"][0]
+    side = {c["homeAway"]: c for c in comp["competitors"]}
+    a, h = side["away"], side["home"]
+    ab, hb = a["team"]["abbreviation"], h["team"]["abbreviation"]
+    sa, sh = _score(a), _score(h)
+    ls_a, ls_h = _linescores(a) or [], _linescores(h) or []
+    ot = max(0, len(ls_a) - 4)
+    final = "Final" + (f"/{ot}OT" if ot > 1 else "/OT" if ot == 1 else "")
+    rec = hist["events"].get(str(ev["id"]))
+    spr = parse_spread(comp, ab, hb)
+    pts = (rec or {}).get("pts") or []
+    line = pts[-1][1] if pts else (spr["line"] if spr else None)
+    total_line = (rec or {}).get("total") if rec and rec.get("total") is not None else (spr["total"] if spr else None)
+    # against the spread / over-under
+    ats_a = ats_h = ""
+    hi_ats = ""
+    if line is not None:
+        adj = (sh - sa) + line
+        if adj > 0:
+            ats_a, ats_h, hi_ats = "Did not cover", f"Covered<small>won by {sh - sa:+d} vs. {fmt_line(hb, line)}</small>", "h"
+        elif adj < 0:
+            ats_a, ats_h, hi_ats = f"Covered<small>{fmt_line(ab, -line)} line</small>", "Did not cover", "a"
+        else:
+            ats_a = ats_h = "Push"
+    ou = ""
+    if total_line not in (None, ""):
+        try:
+            tl = float(total_line)
+            res = "Over" if sa + sh > tl else "Under" if sa + sh < tl else "Push"
+            ou = row("Over / under", f"{sa + sh} points", f"{res}<small>line {tl:g}</small>", "flags")
+        except (TypeError, ValueError):
+            pass
+    ats_row = row("Against the spread", ats_a, ats_h, "flags", hi_ats) if line is not None else ""
+    # quarter table
+    qt = ""
+    if len(ls_a) >= 4 and len(ls_h) >= 4:
+        heads = "".join(f"<th>{'Q' + str(i + 1) if i < 4 else ('OT' if ot == 1 else 'OT' + str(i - 3))}</th>" for i in range(len(ls_a)))
+        r = lambda ab_, ls: f"<tr><th>{escape(ab_)}</th>" + "".join(f"<td>{x:.0f}</td>" for x in ls) + "</tr>"
+        qt = f'<table class="qt"><tr><th></th>{heads}</tr>{r(ab, ls_a)}{r(hb, ls_h)}</table>'
+    # leaders
+    la, lh = comp_leaders(a), comp_leaders(h)
+    if len(la) < 3 or len(lh) < 3:
+        bl = box_leaders(ev["id"])
+        la = {**bl.get(str(a["team"]["id"]), {}), **la}
+        lh = {**bl.get(str(h["team"]["id"]), {}), **lh}
+    cell = lambda d, k: f"{escape(str(d[k][0]))} <b>{escape(str(d[k][1]))}</b>" if k in d else "-"
+    lead_rows = [row(lab, cell(la, k), cell(lh, k), "form") for lab, k in (("Points", "points"), ("Rebounds", "rebounds"), ("Assists", "assists")) if k in la or k in lh]
+    win_a = sa > sh
+    page = f"""<article class="page" data-set="y" data-label="Game {idx} of {total}">
+  <header class="match">
+    <div class="teams"><h2 class="t a"><span class="tn">{escape(a["team"]["displayName"])}<small class="rec">{escape(record_text(a, None))}</small></span></h2>
+    <div class="mid"><span class="at">at</span><span class="tip">{final}</span></div>
+    <h2 class="t h"><span class="tn">{escape(h["team"]["displayName"])}<small class="rec">{escape(record_text(h, None))}</small></span></h2></div>
+    <div class="teams scorerow"><b class="sc a{' win' if win_a else ''}">{sa}</b><span class="dash">&ndash;</span><b class="sc h{'' if win_a else ' win'}">{sh}</b></div>
+  </header>
+  <section class="grp" style="--k:var(--c-flags)"><h3>Result</h3>{qt}{ats_row}{ou}</section>
+  {section("Box score leaders", "form", lead_rows)}
+  {line_section(rec, hb, ab, line)}
+  <section class="grp" style="--k:var(--c-travel)"><h3>Highlights</h3><a class="hl" href="{escape(yt_game(a["team"]["displayName"], h["team"]["displayName"], day), quote=True)}" target="_blank" rel="noopener">&#9654; Watch {escape(ab)} at {escape(hb)} highlights on YouTube</a></section>
+  <section class="grp more" style="--k:var(--mute)"><h3>More coming</h3><p class="calm">Reserved for additional data points.</p></section>
+</article>"""
+    return page, {"ab": ab, "hb": hb, "sa": sa, "sh": sh, "final": final, "link": yt_game(a["team"]["displayName"], h["team"]["displayName"], day),
+                  "ats": (f"{hb} covered" if line is not None and (sh - sa) + line > 0 else f"{ab} covered" if line is not None and (sh - sa) + line < 0 else "push" if line is not None else "")}
+
+
+def y_recap_page(day, items, n):
+    games = "".join(
+        f'<div class="yrow"><span class="ys"><b class="{"win" if i["sa"] > i["sh"] else ""}">{escape(i["ab"])} {i["sa"]}</b> <i>at</i> '
+        f'<b class="{"win" if i["sh"] > i["sa"] else ""}">{escape(i["hb"])} {i["sh"]}</b><small>{escape(i["final"])}{(" &middot; " + escape(i["ats"])) if i["ats"] else ""}</small></span>'
+        f'<a class="hl sm" href="{escape(i["link"], quote=True)}" target="_blank" rel="noopener">&#9654; Highlights</a></div>' for i in items)
+    body = (f'<section class="grp" style="--k:var(--c-flags)"><h3>Scoreboard</h3>{games or "<p class=calm>No games were played yesterday.</p>"}</section>'
+            f'<section class="grp" style="--k:var(--c-travel)"><h3>Everything you missed</h3>'
+            f'<a class="hl" href="{escape(yt_top10(day), quote=True)}" target="_blank" rel="noopener">&#9654; NBA Top 10 plays, {day:%B %-d}</a>'
+            f'<a class="hl" href="{escape(yt_search("NBA game recaps full game highlights " + day.strftime("%B %-d %Y")), quote=True)}" target="_blank" rel="noopener">&#9654; All of the night\'s game recaps</a>'
+            f'<a class="hl" href="https://www.youtube.com/@NBA/videos" target="_blank" rel="noopener">&#9654; NBA YouTube channel, newest videos</a>'
+            f'<p class="cap">These open YouTube search results, so each link lands on the right videos in one tap.</p></section>')
+    return (f'<article class="page" data-set="y" data-label="Recap"><header class="match"><h2 class="minehead">Yesterday</h2>'
+            f'<p class="sub ctr">{day:%A, %B %-d, %Y} &middot; {n} game{"s" if n != 1 else ""}</p></header>{body}</article>')
+
+
+def build_yesterday(today):
+    day = today - timedelta(days=1)
+    try:
+        data = get(f"{API}/scoreboard?dates={day:%Y%m%d}")
+    except Exception as e:
+        print(f"WARNING: yesterday's scoreboard unavailable: {e}")
+        return ('<p class="empty">Yesterday\'s results could not be loaded this hour. They should return on the next update.</p>', 0)
+    evs = [e for e in sorted(data.get("events", []), key=lambda e: e["date"])
+           if (e["competitions"][0].get("status", {}).get("type", {}) or {}).get("completed")]
+    hist = _read_json(SPREAD_HIST, {"events": {}})
+    hist.setdefault("events", {})
+    pages, items = [], []
+    for k, e in enumerate(evs, 1):
+        try:
+            pg, it = y_game_page(e, k, len(evs), day, hist)
+            pages.append(pg)
+            items.append(it)
+        except Exception:
+            print(f"WARNING: yesterday's page for event {e.get('id')} failed")
+            traceback.print_exc()
+    html = y_recap_page(day, items, len(items)) + "".join(pages)
+    print(f"Yesterday: {len(items)} of {len(evs)} games built")
+    return html, len(items)
+
+
 def fallback_card(ev, idx):
     """Bare-bones page for a game whose full card could not be built, so one bad game never breaks the site."""
     try:
@@ -2201,7 +2546,7 @@ def fallback_card(ev, idx):
         net = net_html(ev["competitions"][0])
     except Exception:
         away, home, tip, net = "Away team", "Home team", "", ""
-    return (f'<article class="page" data-i="{idx}"><header class="match">'
+    return (f'<article class="page" data-i="{idx}" data-set="t" data-label="{idx + 1}"><header class="match">'
             f'<div class="teams"><h2 class="t a"><span class="tn">{escape(away)}</span></h2>'
             f'<div class="mid"><span class="at">at</span><span class="tip">{escape(tip)}</span>{net}</div><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
             f'<p class="calm">Details for this game could not be loaded this hour. They should return on the next update.</p></article>')
@@ -2250,23 +2595,31 @@ def main():
         traceback.print_exc()
         spread_payload = {"generated": 0, "games": []}
     spread_json = json.dumps(spread_payload, separators=(",", ":")).replace("</", "<\\/")
-    mine_page = ('<article class="page" id="mine"><header class="match"><h2 class="minehead">Interested today</h2></header>'
+    mine_page = ('<article class="page" id="mine" data-set="t" data-label="Interested"><header class="match"><h2 class="minehead">Interested today</h2></header>'
                  '<div id="mine-body"></div></article>') if events else ""
     cards += mine_page
+    try:
+        y_html, y_n = build_yesterday(today)
+    except Exception:
+        print("WARNING: yesterday's summary failed")
+        traceback.print_exc()
+        y_html, y_n = '<p class="empty">Yesterday\'s summary could not be built this hour.</p>', 0
     foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. The shot-clock rows are an estimate from play-by-play game-clock times, not official tracking data. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
     stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y") + " &middot; updated " + now.astimezone(PT).strftime("%-I:%M %p PT")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
-             '<span class="count" id="count"></span><button id="fwd" type="button">Forward &rsaquo;</button></div>') if n else ""
+             '<span class="count" id="count"></span><button id="fwd" type="button">Forward &rsaquo;</button></div>')
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>JMAG'S NBA Daily Digest</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&family=Oxanium:wght@700;800&display=swap">
 <style>{CSS}</style></head><body>
-<div id="gate"><h1 class="gate-title"><span>JMAG'S NBA</span><span>DAILY DIGEST</span></h1><button id="enter" type="button">Enter</button></div>
+<div id="gate"><h1 class="gate-title"><span>JMAG'S NBA</span><span>DAILY DIGEST</span></h1><div class="gbtns"><button class="gbtn" id="enter" type="button" data-go="t">Today's games</button><button class="gbtn" id="enter-y" type="button" data-go="y">Yesterday's summary</button></div></div>
 <main id="app" data-day="{today:%Y-%m-%d}">
-<div class="bar-top"><h1>JMAG'S NBA Daily Digest</h1><p class="sub">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p>{pager}</div>
-{cards}
+<div class="bar-top"><div class="topline"><h1>JMAG'S NBA Daily Digest</h1><button id="menu" type="button">&#8962; Menu</button></div>
+<p class="sub sub-t">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p><p class="sub sub-y">Yesterday's summary &middot; {y_n} game{'s' if y_n != 1 else ''}</p>{pager}</div>
+<div class="book" data-book="t">{cards}</div>
+<div class="book" data-book="y">{y_html}</div>
 <div class="legend"><span><i style="--k:var(--c-flags)"></i>What stands out</span><span><i style="--k:var(--c-rest)"></i>Rest &amp; schedule</span><span><i style="--k:var(--c-half)"></i>First vs. second half</span><span><i style="--k:var(--c-travel)"></i>Travel</span>
 <span><i style="--k:var(--c-injury)"></i>Injuries</span><span><i style="--k:var(--c-rivalry)"></i>Revenge, rivalry &amp; head to head</span>
 <span><i style="--k:var(--c-match)"></i>Matchup (solid = elite, dashed = bottom 10)</span><span><i style="--k:var(--c-form)"></i>Form</span>
