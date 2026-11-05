@@ -27,6 +27,7 @@ jobs:
           git config user.email "briefing-bot@users.noreply.github.com"
           if [ -f docs/spreads.json ]; then git add docs/spreads.json; fi
           if [ -f data/spread_history.json ]; then git add data/spread_history.json; fi
+          if [ -f data/injury_log.json ]; then git add data/injury_log.json; fi
           git diff --staged --quiet && exit 0
           git commit -m "Update spreads"
           for i in 1 2 3; do
