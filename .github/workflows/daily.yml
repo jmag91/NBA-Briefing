@@ -30,6 +30,7 @@ jobs:
           if [ -f data/halves.json ]; then git add data/halves.json; fi
           if [ -f docs/spreads.json ]; then git add docs/spreads.json; fi
           if [ -f data/spread_history.json ]; then git add data/spread_history.json; fi
+          if [ -f data/injury_log.json ]; then git add data/injury_log.json; fi
           git diff --staged --quiet && exit 0
           git commit -m "Update briefing"
           for i in 1 2 3; do
