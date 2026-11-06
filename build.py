@@ -2605,7 +2605,7 @@ def main():
         traceback.print_exc()
         y_html, y_n = '<p class="empty">Yesterday\'s summary could not be built this hour.</p>', 0
     foot = (ratings["note"] + " " if ratings else "") + "Rotation age weights each player by projected minutes; roster average counts every player equally. Points per possession come from box scores (possessions = FGA + 0.44 x FTA - offensive rebounds + turnovers) and count regular-season games only. The shot-clock rows are an estimate from play-by-play game-clock times, not official tracking data. Season outlook, impact and projected minutes come from your forecast file; impact is a player's contribution to team strength in that model. Form uses completed regular-season games only. Injuries and officials come from ESPN and may lag. Crowd % is the Polymarket price, a rough signal when trading is thin."
-    stamp = now.astimezone(PT).strftime("%A, %B %-d, %Y") + " &middot; updated " + now.astimezone(PT).strftime("%-I:%M %p PT")
+    stamp = today.strftime("%A, %B %-d, %Y") + " games &middot; updated " + now.astimezone(PT).strftime("%-I:%M %p PT")
     n = len(events)
     pager = ('<div class="pager"><button id="back" type="button">&lsaquo; Back</button>'
              '<span class="count" id="count"></span><button id="fwd" type="button">Forward &rsaquo;</button></div>')
