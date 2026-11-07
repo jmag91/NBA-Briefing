@@ -2,7 +2,7 @@ name: NBA briefing
 
 on:
   schedule:
-    - cron: "0 * * * *"   # every hour, on the hour (UTC)
+    - cron: "0 * * * *"   # every hour (UTC); GitHub may start it late
   workflow_dispatch:       # run by hand from the Actions tab
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: briefing
-  cancel-in-progress: false   # let a running build finish instead of cancelling it
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -25,16 +25,21 @@ jobs:
       - run: |
           git config user.name "briefing-bot"
           git config user.email "briefing-bot@users.noreply.github.com"
-          git add docs/index.html
-          if [ -f data/possessions.json ]; then git add data/possessions.json; fi
-          if [ -f data/halves.json ]; then git add data/halves.json; fi
-          if [ -f docs/spreads.json ]; then git add docs/spreads.json; fi
-          if [ -f data/spread_history.json ]; then git add data/spread_history.json; fi
-          if [ -f data/injury_log.json ]; then git add data/injury_log.json; fi
-          git diff --staged --quiet && exit 0
-          git commit -m "Update briefing"
-          for i in 1 2 3; do
-            git pull --rebase --autostash origin main && git push && exit 0
-            sleep 5
+          # Keep this job's output aside, then re-apply it on top of the newest commit.
+          # That way a commit from the spreads job can never cause a merge conflict.
+          FILES="docs/index.html data/possessions.json data/halves.json"
+          mkdir -p /tmp/out
+          for f in $FILES; do
+            if [ -f "$f" ]; then mkdir -p "/tmp/out/$(dirname $f)"; cp "$f" "/tmp/out/$f"; fi
           done
-          echo "Could not push after 3 tries"; exit 1
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp -r /tmp/out/. .
+            for f in $FILES; do if [ -f "$f" ]; then git add "$f"; fi; done
+            git diff --staged --quiet && exit 0
+            git commit -m "Update briefing"
+            git push origin HEAD:main && exit 0
+            sleep $((i * 4))
+          done
+          echo "Could not push after 5 tries"; exit 1
