@@ -1860,6 +1860,7 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 .sg{display:block;width:100%;max-width:540px;margin:8px auto 0;height:auto}
 .sg .gl{stroke:var(--line);stroke-width:1}.sg .op{stroke:var(--mute);stroke-width:1.2;stroke-dasharray:4 3}.sg .ln{fill:none;stroke:var(--c-line);stroke-width:2.2;stroke-linejoin:round}
 .sg .pt{fill:var(--c-line)}.sg text{font:600 10px "Barlow",sans-serif}.sg .ax{fill:var(--mute);font-weight:400}.sg .oplab{fill:var(--mute)}.sg .cur{fill:var(--c-line);font-size:11px}
+.stale{margin:6px 0 0;padding:6px 10px;border:1px solid var(--c-injury);border-radius:8px;color:var(--c-injury);font-size:.85rem}
 .topline{display:flex;justify-content:space-between;align-items:center;gap:10px}
 #menu{font:600 .85rem "Barlow",sans-serif;color:var(--mute);background:transparent;border:1.5px solid var(--line);border-radius:99px;padding:5px 12px;cursor:pointer;white-space:nowrap}
 #menu:hover{color:var(--ink);border-color:var(--ink)}
@@ -1925,6 +1926,11 @@ function show(n,dir){
 }
 function openBook(m,n){mode=m;root.setAttribute('data-mode',m);pages=setOf(m);root.classList.remove('gated');show(n||0,1)}
 function menu(){root.classList.add('gated');try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}window.scrollTo(0,0)}
+try{var app=document.getElementById('app'),day=app&&app.getAttribute('data-day'),
+  nowET=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date());
+  if(day&&nowET>day){var bn=document.createElement('p');bn.className='stale';
+   bn.textContent='These are the games for '+day+'. A newer slate is due; if it does not show up soon the update is delayed.';
+   document.querySelector('.bar-top').appendChild(bn)}}catch(e){}
 var hm=/^#([gy])(\\d+)$/.exec(location.hash);
 if(hm)openBook(hm[1]==='g'?'t':'y',parseInt(hm[2],10)-1);else{root.setAttribute('data-mode','t');root.classList.add('gated')}
 [].forEach.call(document.querySelectorAll('[data-go]'),function(b){b.onclick=function(){openBook(b.getAttribute('data-go'),0)}});
@@ -2111,7 +2117,7 @@ def spreads_for_page(events):
                 return d
     except Exception as e:
         print(f"WARNING: could not read {SPREADS_JSON}: {e}")
-    return update_spreads(events)
+    return update_spreads(events, write=False)   # the 10-minute job owns those files; this build only reads them
 
 
 def spreads_only():
