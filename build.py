@@ -614,7 +614,8 @@ def season_games(tid, season, stype):
             opp = next(c for c in comp["competitors"] if str(c["team"]["id"]) != str(tid))
             sc = lambda c: float((c.get("score") or {}).get("value", 0) if isinstance(c.get("score"), dict) else c.get("score") or 0)
             out.append({"date": parse_dt(ev["date"]).astimezone(ET).date(), "opp_id": str(opp["team"]["id"]),
-                        "win": bool(me.get("winner")), "our": sc(me), "their": sc(opp), "playoff": stype == 3})
+                        "win": bool(me.get("winner")), "our": sc(me), "their": sc(opp), "playoff": stype == 3,
+                        "home": me.get("homeAway") == "home"})
     except Exception as e:
         print(f"WARNING: h2h schedule {tid} {season}/{stype}: {e}")
     _sg_cache[key] = out
@@ -1393,7 +1394,6 @@ def half_rows(ha, hh, a_abbr="", h_abbr=""):
     dom = ""
     if abs(ha["shift"] - hh["shift"]) >= 1.0:
         dom = "a" if ha["shift"] > hh["shift"] else "h"
-    mx = max([10.0] + [abs(g[k1] - g[k2]) for r in (ha, hh) for g in r["games"] for k1, k2 in (("f1", "a1"), ("f2", "a2"))])
     rows = [
         _safe(half_summary, ha, hh, a_abbr, h_abbr),
         row("1st half: scored / allowed", h1(ha), h1(hh), "half"),
@@ -1401,10 +1401,22 @@ def half_rows(ha, hh, a_abbr="", h_abbr=""):
         row("Scoring, 2nd half minus 1st", sh(ha, "shift_f"), sh(hh, "shift_f"), "half"),
         row("Allowed, 2nd half minus 1st", sh(ha, "shift_a"), sh(hh, "shift_a"), "half"),
         row("Margin, 2nd half minus 1st", shn(ha), shn(hh), "half", dom),
-        row("Each of the last 10 games", _safe(half_chart, ha["games"], mx), _safe(half_chart, hh["games"], mx), "half"),
-        '<p class="cap">Per game averages, regular season, overtime left out. Chart: light bar = 1st half, solid bar = 2nd half, up = outscored the opponent.</p>',
+        '<p class="cap">Per game averages, regular season, overtime left out.</p>',
     ]
     return rows
+
+
+def season_table(games, a_abbr, h_abbr):
+    """Every regular-season meeting so far this season, oldest first. games are from the away team's point of view."""
+    aw = sum(g["win"] for g in games)
+    body = []
+    for g in games:
+        win_ab, lose_ab = (a_abbr, h_abbr) if g["win"] else (h_abbr, a_abbr)
+        hi, lo = int(max(g["our"], g["their"])), int(min(g["our"], g["their"]))
+        hm = g.get("home")
+        place = f"{escape(a_abbr)} vs {escape(h_abbr)}" if hm is None else (f"{escape(a_abbr)} at {escape(h_abbr)}" if not hm else f"{escape(h_abbr)} at {escape(a_abbr)}")
+        body.append(f'<tr><td>{g["date"]:%b %-d}</td><td>{place}</td><td><b>{escape(win_ab)}</b> won {hi}&ndash;{lo}</td><td>{hi - lo}</td></tr>')
+    return (f'<table class="mt"><tr><th>Date</th><th>Game</th><th>Result</th><th>Margin</th></tr>{"".join(body)}</table>', aw)
 
 
 def winprob_section(a_abbr, h_abbr, crowd, model_pw):
@@ -1535,17 +1547,17 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         last = h2h["last"]
         winner = a_abbr if last["win"] else h_abbr
         sw = a_abbr if h2h["streak_a"] else h_abbr
-        h2h_rows = [
-            row("Record", f"{aw}-{hw}", f"{hw}-{aw}", "rivalry", dom),
-            row("Avg margin", f"{m:+.1f}", f"{-m:+.1f}", "rivalry"),
-            row("Streak", f"W{h2h['streak']}" if h2h["streak_a"] else "-", f"W{h2h['streak']}" if not h2h["streak_a"] else "-", "rivalry") if h2h["streak"] >= 2 else "",
-            _safe(h2h_chart, h2h["games"], a_abbr, h_abbr),
-        ]
-        h2h_note = (f'<p class="note" style="--k:var(--c-rivalry)"><b>Last meeting</b> {last["date"]:%b %-d, %Y}: {escape(winner)} won '
-                    f'{int(max(last["our"], last["their"]))}-{int(min(last["our"], last["their"]))}'
-                    f'{" (playoffs)" if last["playoff"] else ""}</p>')
+        h2h_rows = []
+        h2h_note = ""
     else:
         h2h_note = ""
+    season_meet = sorted([g for g in season_games(a_id, season, 2) if g["opp_id"] == str(h_id) and g["date"] < today], key=lambda g: g["date"])
+    if season_meet:
+        tbl, aw_s = season_table(season_meet, a_abbr, h_abbr)
+        n_s = len(season_meet)
+        h2h_rows = [row("Series this season", f"{aw_s}-{n_s - aw_s}", f"{n_s - aw_s}-{aw_s}", "rivalry", "a" if aw_s > n_s - aw_s else "h" if n_s - aw_s > aw_s else ""), tbl]
+    else:
+        h2h_rows = ['<p class="calm">These teams have not met yet this regular season.</p>']
     inj_all = load_injuries()
     def availability(f_, abbr):
         """Match ESPN injuries to the team's projected rotation. -> dict or None"""
@@ -1744,7 +1756,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
   {wp_html}
   {section("Rest and schedule", "rest", rest_rows)}
   {section("Form", "form", form_rows)}
-  {section(f"Head to head, last {h2h['n']} meetings" if h2h else "Head to head", "rivalry", h2h_rows)}{h2h_note}
+  {section("Matchups This Season", "rivalry", h2h_rows)}
   {section(f"Season outlook (forecast as of {load_forecast()['as_of']})" if fa and fh else "Season outlook", "outlook", outlook_rows)}{out_note}
   {section("Matchup", "match", match_rows)}{ppp_note}
   {half_sec}
@@ -1811,6 +1823,7 @@ border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
 .half{color:var(--c-half)}
 .calm{margin:0;color:var(--mute)}
 .hsum{display:block;max-width:440px;margin:0 auto}
+.mt{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:.92rem}.mt th{color:var(--mute);font-weight:400;text-align:left;padding:4px 6px;font-size:.8rem}.mt td{padding:7px 6px;border-top:1px solid var(--line)}.mt td:last-child,.mt th:last-child{text-align:right}.mt b{font-weight:600}
 .hchart{display:block;width:100%;max-width:170px;height:auto}.v.a .hchart{margin-left:auto}
 .bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--k) 22%,var(--bg));margin:4px 0 6px;overflow:hidden}
 .bar span{display:block;height:100%;background:var(--k);border-radius:99px 0 0 99px}
