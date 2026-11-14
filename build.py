@@ -297,6 +297,7 @@ def fetch_officials(event_id):
 
 _rosters = {}
 _ages = {}
+_coach_names = {}
 AGE_GAP_TAG = 2.0
 
 
@@ -333,6 +334,7 @@ def roster_names(tid):
         if full:
             names.add(full)
             coaches.append(full.title())
+    _coach_names[str(tid)] = coaches
     print(f"Roster check team {tid}: {n_players} players, coach: {', '.join(coaches) or 'NOT FOUND'}")
     _rosters[tid] = names
     return names
@@ -1194,11 +1196,82 @@ def record_text(comp_team, info):
     return f"{w}-{len(hist) - w}"
 
 
+# ---------------------------------------------------------------------------
+# Head coaches. "team" = first season of the current stint with the team, "hc" = first season as an NBA head coach
+# with any team, both as the year the season ends (2027 = 2026-27). A season counts if the coach started it or took
+# over partway through it. Checked on 2026-11-13 against Basketball-Reference (seasons with franchise / overall) and
+# the Wikipedia list of current NBA head coaches. To correct or add a coach without touching this file, put
+# data/coaches.json next to build.py: {"ABBR": {"name": "...", "team": 2027, "hc": 2027}}.
+# ---------------------------------------------------------------------------
+COACHES = {
+    "ATL": ("Quin Snyder", 2023, 2015), "BOS": ("Joe Mazzulla", 2023, 2023), "BKN": ("Jordi Fernandez", 2025, 2025),
+    "CHA": ("Charles Lee", 2025, 2025), "CHI": ("Tiago Splitter", 2027, 2026), "CLE": ("Kenny Atkinson", 2025, 2017),
+    "DAL": ("Dusty May", 2027, 2027), "DEN": ("David Adelman", 2025, 2025), "DET": ("J.B. Bickerstaff", 2025, 2016),
+    "GS": ("Steve Kerr", 2015, 2015), "HOU": ("Ime Udoka", 2024, 2022), "IND": ("Rick Carlisle", 2022, 2002),
+    "LAC": ("Tyronn Lue", 2021, 2016), "LAL": ("JJ Redick", 2025, 2025), "MEM": ("Tuomas Iisalo", 2025, 2025),
+    "MIA": ("Erik Spoelstra", 2009, 2009), "MIL": ("Taylor Jenkins", 2027, 2020), "MIN": ("Chris Finch", 2021, 2021),
+    "NO": ("Jamahl Mosley", 2027, 2022), "NY": ("Mike Brown", 2026, 2006), "OKC": ("Mark Daigneault", 2021, 2021),
+    "ORL": ("Sean Sweeney", 2027, 2027), "PHI": ("Nick Nurse", 2024, 2019), "PHX": ("Jordan Ott", 2026, 2026),
+    "POR": ("Micah Nori", 2027, 2027), "SAC": ("Doug Christie", 2025, 2025), "SA": ("Mitch Johnson", 2025, 2025),
+    "TOR": ("Darko Rajakovic", 2024, 2024), "UTAH": ("Will Hardy", 2023, 2023), "WSH": ("Brian Keefe", 2024, 2024),
+}
+COACH_ALIASES = {"GSW": "GS", "NOP": "NO", "NYK": "NY", "SAS": "SA", "UTA": "UTAH", "WAS": "WSH", "PHO": "PHX", "BRK": "BKN", "CHO": "CHA"}
+_coach_file = None
+
+
+def _coach_entry(abbr):
+    global _coach_file
+    if _coach_file is None:
+        _coach_file = {}
+        path = os.path.join(os.path.dirname(__file__) or ".", "data", "coaches.json")
+        try:
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    _coach_file = {COACH_ALIASES.get(k.upper(), k.upper()): v for k, v in json.load(f).items()}
+        except Exception as e:
+            print(f"WARNING: could not read data/coaches.json: {e}")
+    key = COACH_ALIASES.get(abbr.upper(), abbr.upper())
+    if key in _coach_file:
+        v = _coach_file[key]
+        return v.get("name"), v.get("team"), v.get("hc")
+    return COACHES.get(key)
+
+
+def _seasons_text(n, what):
+    return f"1st season {what}" if n == 1 else f"{n} seasons {what}"
+
+
+def coach_html(comp_team):
+    """Two small lines under a team's name: the head coach, and how long with the team / as an NBA head coach."""
+    try:
+        t = comp_team["team"]
+        entry = _coach_entry(t["abbreviation"])
+        roster_names(t["id"])
+        live = _coach_names.get(str(t["id"])) or []
+        season_now = datetime.now(ET).year + (1 if datetime.now(ET).month >= 8 else 0)
+        if entry and entry[0]:
+            last = norm(entry[0]).split()[-1]
+            if live and not any(last in norm(c).split() for c in live):
+                # ESPN lists a different head coach than our table: a change since it was checked
+                print(f"WARNING: coach for {t['abbreviation']} is {live} on ESPN but {entry[0]} on file")
+                return f'<small class="coach">Coach {escape(live[0])}</small><small class="coach">recently changed</small>'
+            n_team, n_hc = season_now - entry[1] + 1, season_now - entry[2] + 1
+            if n_team < 1 or n_hc < 1:
+                return f'<small class="coach">Coach {escape(entry[0])}</small>'
+            return (f'<small class="coach">Coach {escape(entry[0])}</small>'
+                    f'<small class="coach tn2">{_seasons_text(n_team, "here")} &middot; {"1st" if n_hc == 1 else n_hc} as NBA HC</small>')
+        if live:
+            return f'<small class="coach">Coach {escape(live[0])}</small>'
+    except Exception as e:
+        print(f"WARNING: coach line skipped: {e}")
+    return ""
+
+
 def name_block(comp_team, info):
     t = comp_team["team"]
     rec = escape(record_text(comp_team, info))
     ab = escape(t["abbreviation"], quote=True)
-    return (f'<span class="tn">{escape(t["displayName"])}<small class="rec">{rec}</small>'
+    return (f'<span class="tn">{escape(t["displayName"])}<small class="rec">{rec}</small>{coach_html(comp_team)}'
             f'<button class="fol" type="button" data-t="{ab}" aria-pressed="false">&#9734; Interested</button></span>')
 
 
@@ -1860,6 +1933,7 @@ details a{color:var(--c-rivalry)}details .kind{font-weight:600;color:var(--ink)}
 .wph span:first-child{text-align:right}.wph b{color:var(--k);font-size:.85rem}
 .split{display:flex;height:12px;border-radius:99px;overflow:hidden;margin-top:5px;gap:2px}.split.thin{height:7px}
 .split i{display:block}.split .a{background:var(--k)}.split .h{background:color-mix(in srgb,var(--k) 35%,var(--bg))}
+.coach{display:block;color:var(--mute);font-size:.8rem;font-weight:400;line-height:1.25;margin-top:2px}.coach.tn2{font-size:.74rem;opacity:.85}
 .fol{display:inline-block;margin-top:7px;font:600 .78rem/1 "Barlow",sans-serif;color:var(--mute);background:transparent;border:1.5px solid var(--line);border-radius:99px;padding:5px 11px;cursor:pointer;white-space:nowrap}
 .fol:hover{border-color:var(--ink);color:var(--ink)}.fol.on{color:#111;background:var(--glow);border-color:var(--glow)}
 .fol:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
