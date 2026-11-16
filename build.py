@@ -1492,17 +1492,19 @@ def season_table(games, a_abbr, h_abbr):
     return (f'<table class="mt"><tr><th>Date</th><th>Game</th><th>Result</th><th>Margin</th></tr>{"".join(body)}</table>', aw)
 
 
-def winprob_section(a_abbr, h_abbr, crowd, model_pw):
+def winprob_section(a_abbr, h_abbr, crowd, model_pw, book_pw=None, book_line=None, h_name=""):
     def bar(label, pa, k, thin):
         pa = pa * 100
         ph = 100 - pa
         return (f'<div class="wp" style="--k:{k}"><div class="wph"><span>{escape(a_abbr)} {pa:.0f}%</span><b>{escape(label)}</b><span>{ph:.0f}% {escape(h_abbr)}</span></div>'
                 f'<div class="split{" thin" if thin else ""}"><i class="a" style="width:{pa:.1f}%"></i><i class="h" style="width:{ph:.1f}%"></i></div></div>')
     rows = []
+    if book_pw is not None:
+        rows.append(bar(f"Book ({fmt_line(h_name, book_line)})", 1 - book_pw, "var(--c-flags)", False))
     if crowd:
-        rows.append(bar("Crowd (Polymarket)", crowd["pa"], "var(--c-line)", False))
+        rows.append(bar("Crowd (Polymarket)", crowd["pa"], "var(--c-line)", book_pw is not None))
     if model_pw is not None:
-        rows.append(bar("Model (my estimate)", 1 - model_pw, "var(--c-outlook)", bool(crowd)))
+        rows.append(bar("Model (my estimate)", 1 - model_pw, "var(--c-outlook)", True))
     return section("Win probability", "line", rows)
 
 
@@ -1593,6 +1595,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     if abs(gap) >= AGE_GAP_TAG:
         older = a_abbr if gap > 0 else h_abbr
         tags.append(("age", f"Age gap: {older} {basis} is older by {abs(gap):.1f} yrs"))
+    pw = None
     if fa and fh:
         for f_, ab in ((fa, a_abbr), (fh, h_abbr)):
             if f_.get("returning_pct") is not None and f_["returning_pct"] < 50:
@@ -1667,6 +1670,28 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
         if abs(ba["impact"] - bh["impact"]) >= 1.5:
             top_, ab_ = (ba, a_abbr) if ba["impact"] > bh["impact"] else (bh, h_abbr)
             tags.append(("age", f"Star power: {ab_} has the best player on the floor, {top_['name']}"))
+    # ---- prices: book spread vs. Polymarket vs. model, and projected total ----
+    sp_g = _SPREADS.get(str(ev["id"]))
+    book_line = sp_g.get("cur") if sp_g else None
+    book_total = sp_g.get("total") if sp_g else None
+    if book_line is None:
+        _s = parse_spread(comp, a_abbr, h_abbr)
+        if _s:
+            book_line, book_total = _s["line"], _s["total"]
+    book_pw = _ncdf(-book_line / BOOK_SD) if book_line is not None else None
+    crowd = crowd_data(ev, away, home)
+    prices = [(lab, v) for lab, v in (("book", book_pw), ("Polymarket", crowd["ph"] if crowd else None), ("model", pw)) if v is not None]
+    if len(prices) >= 2 and max(v for _, v in prices) - min(v for _, v in prices) >= PRICE_GAP:
+        tags.append(("market", f"Prices disagree on {h_abbr}: " + ", ".join(f"{lab} {v * 100:.0f}%" for lab, v in sorted(prices, key=lambda x: x[1]))))
+    proj = None
+    if use_ppp:
+        proj_a, proj_h, proj = project_total(pa_, ph_)
+        try:
+            tl = float(book_total)
+            if abs(proj - tl) >= TOTAL_GAP:
+                tags.append(("market", f"Total: pace and efficiency project {proj:.0f} points, the line is {tl:g} ({'over' if proj > tl else 'under'} side)"))
+        except (TypeError, ValueError):
+            pass
     flags = "".join(f'<li class="{c}"><i></i>{escape(t)}</li>' for c, t in tags)
     flags_html = f'<ul class="flags">{flags}</ul>' if flags else '<p class="calm">No flags for this game.</p>'
 
@@ -1724,6 +1749,9 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
                row("Shot timing", stack(pa_["early"], pa_["late"]), stack(ph_["early"], ph_["late"]), "match"),
                '<p class="cap"><b class="k1">&#9632;</b> first 7 s &middot; <b class="k2">&#9632;</b> 7 to 18 s &middot; <b class="k3">&#9632;</b> after 18 s</p>']
               if "sc" in pa_ and "sc" in ph_ else []),
+            *([row("Projected score", f"{proj_a:.0f}", f"{proj_h:.0f}<small>est. from pace and efficiency</small>", "match"),
+               row("Projected total vs. line", f"{proj:.1f}", (f"line {float(book_total):g}<small>{proj - float(book_total):+.1f}</small>" if book_total not in (None, "") else "no line yet"), "match")]
+              if proj is not None else []),
             row("Pace, last 5 games", _safe(spark, pa_.get("p5") or [], pa_["pace"]) + f"<small>{pa_['pace5']:.1f} &middot; {pa_['pace5'] - pa_['pace']:+.1f} vs. season</small>",
                 _safe(spark, ph_.get("p5") or [], ph_["pace"]) + f"<small>{ph_['pace5']:.1f} &middot; {ph_['pace5'] - ph_['pace']:+.1f} vs. season</small>", "match"),
         ]
@@ -1800,7 +1828,6 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
                     f'by about {abs(edge):.1f} points. This is my estimate from the forecast file team strengths plus home court, '
                     f'not a number in the file.</p>')
 
-    crowd = crowd_data(ev, away, home)
     market_rows, bar = [], ""
     if crowd:
         pa, ph = crowd["pa"] * 100, crowd["ph"] * 100
@@ -1810,7 +1837,7 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
             (da, na), (dh, nh) = crowd["money"]
             market_rows.append(row("Crowd money", f"${da:,.0f}<small>{na} trades</small>", f"${dh:,.0f}<small>{nh} trades</small>", "line"))
     market = section("Market", "line", market_rows)
-    wp_html = _safe(winprob_section, a_abbr, h_abbr, crowd, model_pw)
+    wp_html = _safe(winprob_section, a_abbr, h_abbr, crowd, model_pw, book_pw, book_line, h_abbr)
     line = odds_line(comp)
     line_html = (f'<p class="note" style="--k:var(--c-line)"><b>Line</b> {escape(line)}</p>' if line else "")
 
@@ -1821,7 +1848,9 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
            f' &middot; updated {datetime.now(PT).strftime("%-I:%M %p PT")}</p>') if crowd else ""
 
     tip = tip_dt.strftime("%-I:%M %p PT")
-    return f"""<article class="page" data-i="{idx}" data-set="t" data-label="{idx + 1} of {total}">
+    _OVERVIEW[idx] = {"a": a_abbr, "h": h_abbr, "tip": tip, "ts": int(tip_dt.timestamp()), "line": book_line, "total": book_total, "proj": proj,
+                      "book_h": book_pw, "crowd_h": crowd["ph"] if crowd else None, "model_h": pw, "tags": list(tags)}
+    return f"""<article class="page" data-i="{idx}" data-set="t" data-label="Game {idx + 1} of {total}">
   <header class="match">
     <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span>{net_html(comp)}</div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
   </header>
@@ -1965,6 +1994,15 @@ html[data-mode="t"] .book[data-book="y"],html[data-mode="y"] .book[data-book="t"
 .why small{display:block;color:var(--mute);margin-top:2px}
 .sg .mk{fill:var(--c-line);stroke:var(--bg);stroke-width:2}.sg .mkn{fill:#111;font-size:10px;font-weight:700}
 .more{border:1.5px dashed var(--line);border-radius:12px;padding:6px 14px 10px;margin-top:18px}.more h3{color:var(--mute)}
+.market{color:var(--c-line)}
+.sortbar{display:flex;gap:8px;justify-content:center;margin:12px 0}
+.srt{font:600 .85rem "Barlow",sans-serif;color:var(--mute);background:transparent;border:1.5px solid var(--line);border-radius:99px;padding:6px 14px;cursor:pointer}.srt.on{color:#111;background:var(--glow);border-color:var(--glow)}
+.ovlist{display:grid;gap:10px}
+.ov{display:grid;gap:4px;text-align:left;width:100%;font:inherit;color:var(--ink);background:color-mix(in srgb,var(--c-flags) 5%,transparent);border:1px solid var(--line);border-left:4px solid var(--glow);border-radius:12px;padding:11px 14px;cursor:pointer}
+.ov:hover{background:color-mix(in srgb,var(--glow) 10%,transparent)}
+.ovh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.ovh b{font:700 1.3rem "Barlow Condensed",sans-serif}.ovh i{font-style:normal;color:var(--mute);font-size:.85rem}
+.ovl{font-weight:600}.ovp{color:var(--mute);font-size:.88rem}
+.ovf{display:flex;align-items:center;gap:5px;margin-top:2px}.ovf span{display:inline-block;width:10px;height:10px;border-radius:50%;background:currentColor}.ovf em{color:var(--mute);font-size:.8rem;font-style:normal}.ovf small{margin-left:auto;color:var(--mute)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
@@ -2026,6 +2064,14 @@ document.addEventListener('keydown',function(e){
   if(root.classList.contains('gated')){if(e.key==='Enter')openBook('t',0);return}
   if(e.key==='ArrowLeft')show(i-1,-1);else if(e.key==='ArrowRight')show(i+1,1)});
 back.onclick=function(){show(i-1,-1)};fwd.onclick=function(){show(i+1,1)};
+document.addEventListener('click',function(e){
+  var s=e.target.closest&&e.target.closest('.srt');
+  if(s){var list=document.querySelector('.ovlist'),k=s.getAttribute('data-sort');
+    [].forEach.call(document.querySelectorAll('.srt'),function(b){b.classList.toggle('on',b===s)});
+    [].slice.call(list.children).sort(function(a,b){return k==='int'?(b.getAttribute('data-int')-a.getAttribute('data-int'))||(a.getAttribute('data-ts')-b.getAttribute('data-ts')):a.getAttribute('data-ts')-b.getAttribute('data-ts')}).forEach(function(n){list.appendChild(n)});return}
+  var g=e.target.closest&&e.target.closest('.ov');
+  if(g&&mode==='t')show(parseInt(g.getAttribute('data-p'),10),1);
+});
 var x0=null;
 document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
 document.addEventListener('touchend',function(e){
@@ -2629,6 +2675,68 @@ def build_yesterday(today):
     return html, len(items)
 
 
+# ---------------------------------------------------------------------------
+# Prices (book spread vs. Polymarket vs. model), projected total, and the slate overview
+# ---------------------------------------------------------------------------
+BOOK_SD = 12.0        # points; turns a point spread into a win chance (a 3.5-point favorite is about 61%)
+PRICE_GAP = 0.06      # flag when the three win chances for the home team are this far apart
+TOTAL_GAP = 5.0       # flag when the projected total is this many points from the posted over/under
+_SPREADS = {}         # event id -> spread record (from the 10-minute tracker)
+_OVERVIEW = {}        # game index -> summary used by the overview page
+
+
+def _ncdf(x):
+    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+def project_total(pa_, ph_):
+    """Points each team is expected to score from both teams' pace and efficiency. -> (away, home, total)"""
+    poss = (pa_["pace"] + ph_["pace"]) / 2
+    pts_a = poss * (pa_["off"] + ph_["def"]) / 2
+    pts_h = poss * (ph_["off"] + pa_["def"]) / 2
+    return pts_a, pts_h, pts_a + pts_h
+
+
+def overview_page(events, payload):
+    items = []
+    for i, ev in enumerate(events):
+        o = _OVERVIEW.get(i)
+        if not o:
+            try:
+                comp = ev["competitions"][0]
+                side = {c["homeAway"]: c for c in comp["competitors"]}
+                tip_dt = parse_dt(ev["date"]).astimezone(PT)
+                o = {"a": side["away"]["team"]["abbreviation"], "h": side["home"]["team"]["abbreviation"], "tip": tip_dt.strftime("%-I:%M %p PT"),
+                     "ts": int(tip_dt.timestamp()), "line": None, "total": None, "proj": None, "book_h": None, "crowd_h": None, "model_h": None, "tags": []}
+            except Exception:
+                continue
+        items.append((i, o))
+    if not items:
+        return ""
+    def score(o):
+        return sum(2 if c in ("market", "injury") else 1 for c, _ in o["tags"])
+    rows = []
+    for i, o in items:
+        line = fmt_line(o["h"], o["line"]) if o.get("line") is not None else "no line yet"
+        bits = [line]
+        if o.get("total") is not None:
+            bits.append(f"O/U {float(o['total']):g}")
+        if o.get("proj") is not None:
+            bits.append(f"projects {o['proj']:.0f}")
+        pr = [f"{lab} {v * 100:.0f}%" for lab, v in (("book", o.get("book_h")), ("Polymarket", o.get("crowd_h")), ("model", o.get("model_h"))) if v is not None]
+        dots = "".join(f'<span class="{escape(c)}" title="{escape(t, quote=True)}"></span>' for c, t in o["tags"])
+        rows.append(
+            f'<button type="button" class="ov" data-p="{i + 1}" data-int="{score(o)}" data-ts="{o.get("ts", 0)}">'
+            f'<span class="ovh"><b>{escape(o["a"])} at {escape(o["h"])}</b><i>{escape(o["tip"])}</i></span>'
+            f'<span class="ovl">{escape(" · ".join(bits))}</span>'
+            f'<span class="ovp">{escape(o["h"])} win chance: {escape(" · ".join(pr)) if pr else "no price yet"}</span>'
+            f'<span class="ovf">{dots or "<em>no flags</em>"}<small>{len(o["tags"])} flag{"s" if len(o["tags"]) != 1 else ""}</small></span></button>')
+    return ('<article class="page" data-set="t" data-label="Overview"><header class="match"><h2 class="minehead">Tonight at a glance</h2>'
+            '<p class="sub ctr">Tap a game to open its page</p></header>'
+            '<div class="sortbar"><button type="button" class="srt on" data-sort="ts">By tip time</button><button type="button" class="srt" data-sort="int">Most flags first</button></div>'
+            f'<div class="ovlist">{"".join(rows)}</div></article>')
+
+
 def fallback_card(ev, idx):
     """Bare-bones page for a game whose full card could not be built, so one bad game never breaks the site."""
     try:
@@ -2639,7 +2747,7 @@ def fallback_card(ev, idx):
         net = net_html(ev["competitions"][0])
     except Exception:
         away, home, tip, net = "Away team", "Home team", "", ""
-    return (f'<article class="page" data-i="{idx}" data-set="t" data-label="{idx + 1}"><header class="match">'
+    return (f'<article class="page" data-i="{idx}" data-set="t" data-label="Game {idx + 1}"><header class="match">'
             f'<div class="teams"><h2 class="t a"><span class="tn">{escape(away)}</span></h2>'
             f'<div class="mid"><span class="at">at</span><span class="tip">{escape(tip)}</span>{net}</div><h2 class="t h"><span class="tn">{escape(home)}</span></h2></div></header>'
             f'<p class="calm">Details for this game could not be loaded this hour. They should return on the next update.</p></article>')
@@ -2680,13 +2788,19 @@ def main():
             print(f"WARNING: could not build the card for event {e.get('id')}")
             traceback.print_exc()
             return fallback_card(e, i)
-    cards = "".join(safe_card(e, i) for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
     try:
         spread_payload = spreads_for_page(events)
     except Exception:
         print("WARNING: spreads failed; the My teams page will have no lines")
         traceback.print_exc()
         spread_payload = {"generated": 0, "games": []}
+    _SPREADS.update({g["id"]: g for g in spread_payload.get("games", [])})
+    cards = "".join(safe_card(e, i) for i, e in enumerate(events)) or '<p class="empty">No NBA games today. Check back tomorrow morning.</p>'
+    try:
+        cards = overview_page(events, spread_payload) + cards
+    except Exception:
+        print("WARNING: overview page failed")
+        traceback.print_exc()
     spread_json = json.dumps(spread_payload, separators=(",", ":")).replace("</", "<\\/")
     mine_page = ('<article class="page" id="mine" data-set="t" data-label="Interested"><header class="match"><h2 class="minehead">Interested today</h2></header>'
                  '<div id="mine-body"></div></article>') if events else ""
