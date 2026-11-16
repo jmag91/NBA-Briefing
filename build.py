@@ -1185,6 +1185,16 @@ def badge(team):
             f'<span class="ab">{escape(team["abbreviation"])}</span></span>')
 
 
+def ov_logo(team):
+    """Plain team logo (no circle behind it) for the Overview page; ESPN's standard logo URL if the feed has none."""
+    ab = (team.get("abbreviation") or "").strip()
+    url = (team.get("logo") or "").strip()
+    if not url.startswith("https://"):
+        url = f"https://a.espncdn.com/i/teamlogos/nba/500/{ab.lower()}.png"
+    return (f'<img class="ovlogo" src="{escape(url, quote=True)}" alt="{escape(ab, quote=True)}" referrerpolicy="no-referrer" '
+            f'onerror="this.replaceWith(document.createTextNode(this.alt))">')
+
+
 def record_text(comp_team, info):
     """Overall record from ESPN's scoreboard, else counted from finished games."""
     recs = comp_team.get("records") or []
@@ -1849,7 +1859,8 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
 
     tip = tip_dt.strftime("%-I:%M %p PT")
     _OVERVIEW[idx] = {"a": a_abbr, "h": h_abbr, "tip": tip, "ts": int(tip_dt.timestamp()), "line": book_line, "total": book_total, "proj": proj,
-                      "book_h": book_pw, "crowd_h": crowd["ph"] if crowd else None, "model_h": pw, "tags": list(tags)}
+                      "book_h": book_pw, "crowd_h": crowd["ph"] if crowd else None, "model_h": pw, "tags": list(tags),
+                      "ab": ov_logo(away["team"]), "hb": ov_logo(home["team"]), "ac": away["team"].get("color"), "hc": home["team"].get("color")}
     return f"""<article class="page" data-i="{idx}" data-set="t" data-label="Game {idx + 1} of {total}">
   <header class="match">
     <div class="teams"><h2 class="t a">{name_block(away, ai)}{badge(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span>{net_html(comp)}</div><h2 class="t h">{badge(home["team"])}{name_block(home, hi)}</h2></div>
@@ -1998,11 +2009,12 @@ html[data-mode="t"] .book[data-book="y"],html[data-mode="y"] .book[data-book="t"
 .sortbar{display:flex;gap:8px;justify-content:center;margin:12px 0}
 .srt{font:600 .85rem "Barlow",sans-serif;color:var(--mute);background:transparent;border:1.5px solid var(--line);border-radius:99px;padding:6px 14px;cursor:pointer}.srt.on{color:#111;background:var(--glow);border-color:var(--glow)}
 .ovlist{display:grid;gap:10px}
-.ov{display:grid;gap:4px;text-align:left;width:100%;font:inherit;color:var(--ink);background:color-mix(in srgb,var(--c-flags) 5%,transparent);border:1px solid var(--line);border-left:4px solid var(--glow);border-radius:12px;padding:11px 14px;cursor:pointer}
-.ov:hover{background:color-mix(in srgb,var(--glow) 10%,transparent)}
-.ovh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.ovh b{font:700 1.3rem "Barlow Condensed",sans-serif}.ovh i{font-style:normal;color:var(--mute);font-size:.85rem}
-.ovl{font-weight:600}.ovp{color:var(--mute);font-size:.88rem}
-.ovf{display:flex;align-items:center;gap:5px;margin-top:2px}.ovf span{display:inline-block;width:10px;height:10px;border-radius:50%;background:currentColor}.ovf em{color:var(--mute);font-size:.8rem;font-style:normal}.ovf small{margin-left:auto;color:var(--mute)}
+.ov{display:grid;gap:7px;text-align:left;width:100%;font:inherit;color:var(--ink);background:linear-gradient(180deg,color-mix(in srgb,var(--c-flags) 13%,#2a2d33),color-mix(in srgb,var(--c-flags) 5%,#1d1f24));border:1px solid color-mix(in srgb,var(--c-flags) 22%,transparent);border-top-color:color-mix(in srgb,var(--c-flags) 40%,transparent);border-radius:14px;padding:13px 15px;cursor:pointer;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 5px 0 rgba(0,0,0,.45),0 10px 18px rgba(0,0,0,.4);transform:translateY(-2px);transition:transform .12s,box-shadow .12s}
+.ov:hover{transform:translateY(-4px);box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 7px 0 rgba(0,0,0,.45),0 14px 24px rgba(0,0,0,.45)}
+.ov:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 1px 0 rgba(0,0,0,.45),0 3px 6px rgba(0,0,0,.4)}
+.ovh{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}.ovt{display:flex;align-items:center;gap:8px;min-width:0}.ovt.r{justify-content:flex-end}.ovt b{font:700 1.3rem "Barlow Condensed",sans-serif}.ovlogo{width:2.8rem;height:2.8rem;object-fit:contain;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.ovat{display:flex;flex-direction:column;align-items:center;color:var(--mute);font-size:.8rem;line-height:1.2}.ovat i{font-style:normal;white-space:nowrap}
+.ovl{font-weight:600;text-align:center}.ovp{text-align:center;font-size:.88rem;font-weight:600;color:color-mix(in srgb,var(--fc) 70%,#fff)}.ovn{color:var(--mute);text-align:center}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:26px;font-size:.85rem;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--k)}
 .empty,.foot{color:var(--mute)}.foot{font-size:.88rem;margin-top:14px}
@@ -2707,7 +2719,8 @@ def overview_page(events, payload):
                 side = {c["homeAway"]: c for c in comp["competitors"]}
                 tip_dt = parse_dt(ev["date"]).astimezone(PT)
                 o = {"a": side["away"]["team"]["abbreviation"], "h": side["home"]["team"]["abbreviation"], "tip": tip_dt.strftime("%-I:%M %p PT"),
-                     "ts": int(tip_dt.timestamp()), "line": None, "total": None, "proj": None, "book_h": None, "crowd_h": None, "model_h": None, "tags": []}
+                     "ts": int(tip_dt.timestamp()), "line": None, "total": None, "proj": None, "book_h": None, "crowd_h": None, "model_h": None, "tags": [],
+                     "ab": ov_logo(side["away"]["team"]), "hb": ov_logo(side["home"]["team"]), "ac": side["away"]["team"].get("color"), "hc": side["home"]["team"].get("color")}
             except Exception:
                 continue
         items.append((i, o))
@@ -2723,14 +2736,22 @@ def overview_page(events, payload):
             bits.append(f"O/U {float(o['total']):g}")
         if o.get("proj") is not None:
             bits.append(f"projects {o['proj']:.0f}")
-        pr = [f"{lab} {v * 100:.0f}%" for lab, v in (("book", o.get("book_h")), ("Polymarket", o.get("crowd_h")), ("model", o.get("model_h"))) if v is not None]
-        dots = "".join(f'<span class="{escape(c)}" title="{escape(t, quote=True)}"></span>' for c, t in o["tags"])
+        vals = [(lab, o.get(k)) for lab, k in (("book", "book_h"), ("Polymarket", "crowd_h"), ("model", "model_h")) if o.get(k) is not None]
+        lead = next((v for _, v in vals), None)
+        home_fav = lead is None or lead >= 0.5
+        fav, fcol = (o["h"], o.get("hc")) if home_fav else (o["a"], o.get("ac"))
+        fcol = (fcol or "").lstrip("#")
+        if len(fcol) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in fcol):
+            fcol = "9ca3af"
+        pr = [f"{lab} {(v if home_fav else 1 - v) * 100:.0f}%" for lab, v in vals]
+        n = len(o["tags"])
         rows.append(
             f'<button type="button" class="ov" data-p="{i + 1}" data-int="{score(o)}" data-ts="{o.get("ts", 0)}">'
-            f'<span class="ovh"><b>{escape(o["a"])} at {escape(o["h"])}</b><i>{escape(o["tip"])}</i></span>'
+            f'<span class="ovh"><span class="ovt">{o.get("ab", escape(o["a"]))}<b>{escape(o["a"])}</b></span><span class="ovat">at<i>{escape(o["tip"])}</i></span>'
+            f'<span class="ovt r"><b>{escape(o["h"])}</b>{o.get("hb", "")}</span></span>'
             f'<span class="ovl">{escape(" · ".join(bits))}</span>'
-            f'<span class="ovp">{escape(o["h"])} win chance: {escape(" · ".join(pr)) if pr else "no price yet"}</span>'
-            f'<span class="ovf">{dots or "<em>no flags</em>"}<small>{len(o["tags"])} flag{"s" if len(o["tags"]) != 1 else ""}</small></span></button>')
+            f'<span class="ovp" style="--fc:#{fcol}">{escape(fav)} win chance: {escape(" · ".join(pr)) if pr else "no price yet"}</span>'
+            f'<small class="ovn">{n} flag{"s" if n != 1 else ""}</small></button>')
     return ('<article class="page" data-set="t" data-label="Overview"><header class="match"><h2 class="minehead">Tonight at a glance</h2>'
             '<p class="sub ctr">Tap a game to open its page</p></header>'
             '<div class="sortbar"><button type="button" class="srt on" data-sort="ts">By tip time</button><button type="button" class="srt" data-sort="int">Most flags first</button></div>'
