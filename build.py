@@ -2023,20 +2023,16 @@ html.gated,html.gated body{background:#000;overflow:hidden;height:100%}
 html.gated #app{display:none}
 html.gated #gate{display:flex;position:fixed;inset:0;z-index:50;background:#000;flex-direction:column;align-items:center;
 justify-content:center;gap:clamp(40px,8vh,72px);padding:24px;text-align:center}
-.gate-title{margin:0;font:800 clamp(2.1rem,7.2vw,5.4rem)/1.04 "Oxanium","Orbitron",system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;
-background:linear-gradient(180deg,#fff 0%,#d3d7dc 46%,#6f757c 52%,#cfd3d8 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.gate-title span{display:block}
+.gate-title{margin:0;font:400 clamp(4.2rem,22vw,12rem)/1.15 "Pinyon Script","Great Vibes","Snell Roundhand","Apple Chancery",cursive;letter-spacing:.01em;white-space:nowrap;color:#f3ecd9;
+text-shadow:0 0 28px rgba(233,226,208,.14);padding:0 .08em}
+.gate-rule{width:min(60vw,420px);height:1px;margin:-18px 0;background:linear-gradient(90deg,transparent,#b9a87a,transparent)}
 .gbtns{display:flex;flex-direction:column;align-items:center;gap:22px}
-.gbtn{font:700 1.1rem/1 "Oxanium",system-ui,sans-serif;letter-spacing:.2em;text-indent:.2em;white-space:nowrap;text-transform:uppercase;color:#f4ff1a;background:#000;
-border:2px solid #f4ff1a;border-radius:0;padding:18px 10px;cursor:pointer;width:min(86vw,360px);
-text-shadow:0 0 10px rgba(244,255,26,.7);
-box-shadow:0 0 10px rgba(244,255,26,.6),0 0 34px rgba(244,255,26,.28),inset 0 0 16px rgba(244,255,26,.16);
-transition:background .18s,color .18s,text-shadow .18s}
-.gbtn:hover{background:#f4ff1a;color:#000;text-shadow:none}
-.gbtn:focus-visible{outline:2px solid #fff;outline-offset:5px}
-@media (prefers-reduced-motion:no-preference){.gbtn{animation:breathe 3.4s ease-in-out infinite}.gate-title,.gbtn{animation-fill-mode:both}
-@keyframes breathe{0%,100%{box-shadow:0 0 8px rgba(244,255,26,.5),0 0 26px rgba(244,255,26,.2),inset 0 0 12px rgba(244,255,26,.12)}
-50%{box-shadow:0 0 14px rgba(244,255,26,.8),0 0 48px rgba(244,255,26,.38),inset 0 0 20px rgba(244,255,26,.22)}}}
+.gbtn{font:600 1.05rem/1 "Cormorant Garamond","Playfair Display",Georgia,serif;letter-spacing:.32em;text-indent:.32em;white-space:nowrap;text-transform:uppercase;color:#efe6cf;
+background:linear-gradient(180deg,#34363b 0%,#1c1d20 100%);border:1px solid #6d6246;border-top-color:#b9a87a;border-radius:10px;padding:20px 10px;cursor:pointer;width:min(86vw,380px);
+box-shadow:0 1px 0 rgba(255,255,255,.14) inset,0 6px 0 #0b0b0c,0 14px 26px rgba(0,0,0,.7);transform:translateY(-3px);transition:transform .14s,box-shadow .14s,color .14s}
+.gbtn:hover{color:#fff;transform:translateY(-6px);box-shadow:0 1px 0 rgba(255,255,255,.18) inset,0 9px 0 #0b0b0c,0 20px 34px rgba(0,0,0,.75)}
+.gbtn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 1px 0 #0b0b0c,0 3px 8px rgba(0,0,0,.6)}
+.gbtn:focus-visible{outline:2px solid #b9a87a;outline-offset:5px}
 @media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.net{font-size:.68rem}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
@@ -2840,9 +2836,9 @@ def main():
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>JMAG'S NBA Daily Digest</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&family=Oxanium:wght@700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&family=Oxanium:wght@700;800&family=Pinyon+Script&family=Cormorant+Garamond:wght@600&display=swap">
 <style>{CSS}</style></head><body>
-<div id="gate"><h1 class="gate-title"><span>JMAG'S NBA</span><span>DAILY DIGEST</span></h1><div class="gbtns"><button class="gbtn" id="enter" type="button" data-go="t">Today's games</button><button class="gbtn" id="enter-y" type="button" data-go="y">Yesterday's summary</button></div></div>
+<div id="gate"><h1 class="gate-title" aria-label="Selective">Selective</h1><div class="gate-rule"></div><div class="gbtns"><button class="gbtn" id="enter" type="button" data-go="t">Today's games</button><button class="gbtn" id="enter-y" type="button" data-go="y">Yesterday's summary</button></div></div>
 <main id="app" data-day="{today:%Y-%m-%d}">
 <div class="bar-top"><div class="topline"><h1>JMAG'S NBA Daily Digest</h1><button id="menu" type="button">&#8962; Menu</button></div>
 <p class="sub sub-t">{stamp} &middot; {n} game{'s' if n != 1 else ''}</p><p class="sub sub-y">Yesterday's summary &middot; {y_n} game{'s' if y_n != 1 else ''}</p>{pager}</div>
