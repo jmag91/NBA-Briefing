@@ -1277,11 +1277,12 @@ def coach_html(comp_team):
     return ""
 
 
-def name_block(comp_team, info):
+def name_block(comp_team, info, side=""):
     t = comp_team["team"]
     rec = escape(record_text(comp_team, info))
     ab = escape(t["abbreviation"], quote=True)
     return (f'<span class="tn">{escape(t["displayName"])}<small class="rec">{rec}</small>{coach_html(comp_team)}'
+            f'<span class="fs" data-s="{side}" hidden></span>'
             f'<button class="fol" type="button" data-t="{ab}" aria-pressed="false">&#9734; Interested</button></span>')
 
 
@@ -1861,9 +1862,9 @@ def card(ev, today, season, revenge, rivalries, ratings, idx=0, total=1):
     _OVERVIEW[idx] = {"a": a_abbr, "h": h_abbr, "tip": tip, "ts": int(tip_dt.timestamp()), "line": book_line, "total": book_total, "proj": proj,
                       "book_h": book_pw, "crowd_h": crowd["ph"] if crowd else None, "model_h": pw, "tags": list(tags),
                       "ab": ov_logo(away["team"]), "hb": ov_logo(home["team"]), "ac": away["team"].get("color"), "hc": home["team"].get("color")}
-    return f"""<article class="page" data-i="{idx}" data-set="t" data-label="Game {idx + 1} of {total}">
+    return f"""<article class="page" data-i="{idx}" data-ev="{escape(str(ev["id"]), quote=True)}" data-set="t" data-label="Game {idx + 1} of {total}">
   <header class="match">
-    <div class="teams"><h2 class="t a">{name_block(away, ai)}{ov_logo(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span>{net_html(comp)}</div><h2 class="t h">{ov_logo(home["team"])}{name_block(home, hi)}</h2></div>
+    <div class="teams"><h2 class="t a">{name_block(away, ai, "a")}{ov_logo(away["team"])}</h2><div class="mid"><span class="at">at</span><span class="tip">{tip}</span>{net_html(comp)}</div><h2 class="t h">{ov_logo(home["team"])}{name_block(home, hi, "h")}</h2></div>
   </header>
   <section class="grp flagsec" style="--k:var(--c-flags)"><h3>What stands out</h3>{flags_html}</section>
   {wp_html}
@@ -2062,7 +2063,12 @@ box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 3px 0 #0b0b0c,0 6px 10px rgba(0
 .a2hs:hover{transform:translateY(-4px);color:#fff}.a2hs:active{transform:translateY(2px);box-shadow:0 1px 0 #0b0b0c}
 .a2note{margin:0;max-width:340px;text-align:center;color:var(--mute);font-size:.88rem}
 html.gated #gate .a2wrap{margin-top:0}
-@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.net{font-size:.68rem}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.t .ovlogo{width:2.7rem;height:2.7rem}.rec{font-size:.85rem}}
+.fs{display:flex;flex-direction:column;align-items:center;margin-top:8px;line-height:1}
+.fs[hidden]{display:none}
+.fs em{font:600 .62rem/1 "Jost",sans-serif;letter-spacing:.28em;text-indent:.28em;text-transform:uppercase;color:var(--mute);font-style:normal;margin-bottom:3px}
+.fs b{font:700 3.4rem/1 "Cormorant Garamond",Georgia,serif;font-variant-numeric:lining-nums}
+.fs.w b{color:#f6efdc;text-shadow:0 0 22px rgba(233,226,208,.25)}.fs.l b{color:#8d877a}
+@media (max-width:480px){.teams{grid-template-columns:minmax(0,1fr) 4.4rem minmax(0,1fr);gap:6px}.tip{font-size:.72rem;padding:2px 7px;white-space:nowrap}.net{font-size:.68rem}.t span{min-width:0}.t{font-size:1.18rem;gap:6px}.fol{font-size:.7rem;padding:4px 8px;margin-top:5px}.badge{font-size:.7rem}.row{gap:8px}.page{padding:18px 14px}.badge{width:2.4rem;height:2.4rem}.t .ovlogo{width:2.7rem;height:2.7rem}.fs b{font-size:2.8rem}.rec{font-size:.85rem}}
 @media (prefers-reduced-motion:no-preference){.page.on{animation:flip .22s ease-out}}
 @keyframes flip{from{opacity:0;transform:translateX(var(--dx,12px))}to{opacity:1;transform:none}}
 """
@@ -2252,7 +2258,13 @@ def update_spreads(events, write=True, now_ts=None):
             rec["home"] = {"abbr": h["abbreviation"], "name": h["displayName"]}
             pts = rec["pts"]
             opened = rec["open"] if rec.get("open") is not None else (pts[0][1] if pts else None)
-            games.append({"id": eid, "away": rec["away"], "home": rec["home"], "tip": rec["tip"], "state": state,
+            score = None
+            if state == "post":
+                try:
+                    score = {"a": int(float(side["away"].get("score"))), "h": int(float(side["home"].get("score")))}
+                except (TypeError, ValueError):
+                    score = None
+            games.append({"id": eid, "score": score, "away": rec["away"], "home": rec["home"], "tip": rec["tip"], "state": state,
                           "open": opened, "open_src": "espn" if rec.get("open") is not None else "first",
                           "cur": pts[-1][1] if pts else None, "total": rec.get("total"), "pts": pts,
                           "checked": rec.get("checked")})
@@ -2371,12 +2383,23 @@ document.addEventListener('click',function(e){
   if(b.hasAttribute('data-rm')||k>=0){if(k>=0)followed.splice(k,1)}else followed.push(t);
   save();sync();renderMine();
 });
+function scores(){
+  if(!data||!data.games)return;
+  data.games.forEach(function(g){
+    var pg=document.querySelector('.page[data-ev="'+g.id+'"]');if(!pg)return;
+    var a=pg.querySelector('.fs[data-s="a"]'),h=pg.querySelector('.fs[data-s="h"]');if(!a||!h)return;
+    var sc=g.score;
+    if(g.state==='post'&&sc&&typeof sc.a==='number'&&typeof sc.h==='number'){
+      [[a,sc.a,sc.h],[h,sc.h,sc.a]].forEach(function(x){x[0].innerHTML='<em>Final</em><b>'+x[1]+'</b>';x[0].className='fs '+(x[1]>x[2]?'w':'l');x[0].hidden=false});
+    }else{a.hidden=true;h.hidden=true}
+  });
+}
 function refresh(){
   if(!window.fetch)return;
   fetch('spreads.json?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject()})
-   .then(function(d){if(d&&d.games){data=d;renderMine()}}).catch(function(){});
+   .then(function(d){if(d&&d.games){data=d;renderMine();scores()}}).catch(function(){});
 }
-load();sync();renderMine();refresh();
+load();sync();renderMine();scores();refresh();
 setInterval(refresh,600000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)refresh()});
 })();
